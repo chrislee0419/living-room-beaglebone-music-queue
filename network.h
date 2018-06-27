@@ -27,4 +27,9 @@ void network_sendPauseCmd(void);
  */
 void network_sendSkipCmd(void);
 
+/**
+ * Send audio data to slave devices
+ */
+void network_sendAudio(char *buf, int len);
+
 #endif

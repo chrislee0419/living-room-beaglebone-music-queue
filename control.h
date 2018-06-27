@@ -2,6 +2,7 @@
 #define _CONTROL_H_
 
 #define CONTROL_MAXLEN_FN       256
+#define CONTROL_MAXLEN_FN       128
 
 enum control_mode {
         CONTROL_MODE_UNKNOWN = -1,
@@ -11,6 +12,7 @@ enum control_mode {
 
 typedef struct {
         char fn[CONTROL_MAXLEN_FN];
+        char url[CONTROL_MAXLEN_URL];
         int repeat;
         song_t *prev;
         song_t *next;
@@ -56,16 +58,10 @@ void control_skipSong(void);
 void control_setRepeatSong(void);
 
 /**
- * Add a song from local storage to the queue
- * @param fn Song filename, should be mp3 format
- */
-void control_addLocalSong(char *fn);
-
-/**
  * Add a song from YouTube to the queue
  * @param url YouTube URL
  */
-//void control_addYTSong(char *url);
+void control_addSong(char *url);
 
 /**
  * Remove a song from the queue
@@ -75,14 +71,26 @@ void control_removeSong(unsigned int index);
 
 /**
  * Produce a string containing the queue
- * @returns Linked list of song_t objects
+ * @return Linked list of song_t objects
  */
 song_t *control_getQueue(void);
+
+/**
+ * Get the next song in the queue
+ * @return Address to the next song_t object (immutable)
+ */
+const song_t *control_getNextSong(void);
 
 /**
  * Set the volume for audio playback
  * @param vol Volume level from 0 to 99
  */
 void control_setVolume(unsigned int vol);
+
+/**
+ * Get the current volume level of the device
+ * @return Volume level (0-99)
+ */
+int control_getVolume(void);
 
 #endif
