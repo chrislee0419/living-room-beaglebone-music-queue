@@ -3,27 +3,60 @@
 <head>
 	<title>BeagleBone Music Player</title>
 	<meta charset="UTF-8">
+
+	<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css" integrity="sha384-WskhaSGFgHYWDcbwN70/dfYBj47jz9qbsMId/iRN3ewGhXQFZCSftd1LZCfmhktB" crossorigin="anonymous">
+
 	<link rel='stylesheet' href='/stylesheets/style.css'></link>
 </head>
 
 <body>
-<form>
-	<h1>BeagleBone Music Player</h1>
-	<div>by Chris Lee, Eoin Coll, and Eric Liu</div>
-	
-	<div id='content'>
-		
-		<div id='error-box'>
-			<h2>Server Error</h2>
-			<p>Server error detected. Please resolve error before continuing.</p>
-			<div><code id='error-text'>No error yet...</code></div>
-		</div>
 
-	</div>
-</form>
-	
-	<script src='/socket.io/socket.io.js' type='text/javascript'></script>
-	<script src='http://code.jquery.com/jquery-1.11.1.min.js' type='text/javascript'></script>
-	<script src='javascripts/player_ui.js' type='text/javascript'></script>
+<div id='content' class="container">
+
+<h1>BeagleBone Music Player</h1>
+<div>by Chris Lee, Eoin Coll, and Eric Liu</div>
+
+<div id='add-new-song'>
+	<input type="text" name="new-song-input" placeholder="YouTube link">
+	<input type="button" id="button-addsong" value="Add Song"/>
+</div>
+
+<div id='song-queue'>
+	<table id="song-list" class="table">
+	  <tr>
+	    <th>TITLE</th>
+	    <th>TIME</th> 
+	    <th>...</th>
+	  </tr>
+	  <tr class="song-currently-playing">
+	    <td>Rick Astley - Never Gonna Give You Up (Video)</td>
+	    <td>3:32</td>
+	    <td></td>
+	  </tr>
+	</table>
+</div>
+
+<div id='error-box'>
+	<h2>Server Error</h2>
+	<p>Server error detected. Please resolve error before continuing.</p>
+	<div><p id='error-text'>No error yet...</p></div>
+</div>
+
+<nav id='playback-controls' class="navbar fixed-bottom navbar-dark bg-dark">
+	<input type="button" id="button-prevsong" value="Prev"/>
+	<input type="button" id="button-playpause" value="Play"/>
+	<input type="button" id="button-nextsong" value="Next"/>
+</nav>
+
+</div>
+
+<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/js/bootstrap.min.js" integrity="sha384-smHYKdLADwkXOn1EmN1qk/HfnUcbVRZyYmZ4qpPea6sjB/pTJ0euyQp0Mk8ck+5T" crossorigin="anonymous"></script>
+
+<script src='/socket.io/socket.io.js' type='text/javascript'></script>
+<script src='http://code.jquery.com/jquery-1.11.1.min.js' type='text/javascript'></script>
+<script src='javascripts/player_ui.js' type='text/javascript'></script>
+
 </body>
 </html>

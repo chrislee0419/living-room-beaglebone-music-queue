@@ -6,7 +6,7 @@
 */
 
 const POLL_INTERVAL_MS = 1000;
-const UPDATE_TIMEOUT = 1000;
+const UPDATE_TIMEOUT = 5000;
 const ERROR_DISPLAY_TIME = 2000;
 const COMMAND_DELIM = ";"
 
