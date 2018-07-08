@@ -1,10 +1,11 @@
 OUTFILE = musicPlayer
 OUTDIR = $(HOME)/cmpt433/public/myApps
 
-CC_C = arm-linux-gnueabihf-gcc 
+CC_C = arm-linux-gnueabihf-gcc
 CFLAGS = -Wall -g -std=c99 -D _POSIX_C_SOURCE=200809L -Werror -pthread
 
 SRCS = $(wildcard *.c)
+
 
 all: app
 
@@ -13,3 +14,6 @@ app:
 
 clean:
 	rm $(OUTDIR)/$(OUTFILE)
+
+audio:
+	$(CC_C) $(CFLAGS) mp3towav.c -o $(OUTDIR)/mp3towav
