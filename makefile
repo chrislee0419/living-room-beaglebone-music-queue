@@ -6,10 +6,15 @@ CFLAGS = -Wall -g -std=c99 -D _POSIX_C_SOURCE=200809L -Werror -pthread
 
 SRCS = $(wildcard *.c)
 
-all: app
+all: app node
 
 app:
 	$(CC_C) $(CFLAGS) $(SRCS) -o $(OUTDIR)/$(OUTFILE)
 
+node:
+	mkdir -p $(OUTDIR)/music-player-nodejs-copy/
+	cp -R nodejs/* $(OUTDIR)/music-player-nodejs-copy/ 
+
 clean:
 	rm $(OUTDIR)/$(OUTFILE)
+	rm -R $(OUTDIR)/music-player-nodejs-copy/ 
