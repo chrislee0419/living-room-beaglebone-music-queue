@@ -1,6 +1,9 @@
+#include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <time.h>
 #include <pthread.h>
 #include <errno.h>
@@ -8,8 +11,8 @@
 #include "network.h"
 #include "control.h"
 
-#define INTERNAL_PORT           12345
-#define OUTBOUND_PORT           12346
+#define INBOUND_PORT            12345
+#define OUTBOUND_PORT           23456
 #define BUFFER_SIZE             NETWORK_MAX_BUFFER_SIZE
 
 #define CMD_OFFSET              4
@@ -24,7 +27,7 @@
 #define CMD_SKIP                        "skip"
 #define CMD_ADD_SONG                    "addsong=%s"
 #define CMD_REMOVE_SONG                 "rmsong=%s"
-#define CMD_REPEAT_SONG                 "repeat=%s"
+#define CMD_REPEAT_SONG                 "repeat=%d"
 #define CMD_CHANGE_MODE                 "mode="
 #define CMD_SSCANF_MATCHES              1
 
@@ -42,9 +45,9 @@ struct out_msg {
         struct out_msg *next;
 };
 
-struct out_msg *out_queue = NULL;
-pthread_mutex_t queue_mtx = PTHREAD_MUTEX_INITIALIZER;
-struct timespec timer = { .tv_nsec = QUEUE_POLL_TIME_NS };
+static struct out_msg *out_queue = NULL;
+static pthread_mutex_t queue_mtx = PTHREAD_MUTEX_INITIALIZER;
+static struct timespec timer = { .tv_nsec = QUEUE_POLL_TIME_NS };
 
 /**
  * Helper functions
@@ -78,11 +81,11 @@ static void queueOutboundMessage(char *buf, unsigned int buf_size, struct sockad
 {
         struct out_msg *msg, *elem;
 
-        msg = malloc(sizeof(out_msg));
+        msg = malloc(sizeof(struct out_msg));
         if (!msg)
                 goto out;
 
-        (void)memset(msg, 0, sizeof(out_msg));
+        (void)memset(msg, 0, sizeof(struct out_msg));
         (void)strncpy(msg->buf, buf, buf_size);
         msg->out_addr = sa;
 
@@ -125,7 +128,6 @@ static int processCmd(char *buf)
         } else if (sscanf(buf, CMD_REPEAT_SONG, &num) == CMD_SSCANF_MATCHES) {
                 control_setRepeatStatus(num);
         } else if (strstr(buf, CMD_CHANGE_MODE)) {
-
                 if (strstr(buf, "master")) {
                         control_setMasterMode();
                 } else if (strstr(buf, "slave,")) {
@@ -142,16 +144,17 @@ static int processCmd(char *buf)
                                 port = atoi(c);
 
                                 if (!port)
-                                        port = INTERNAL_PORT;
+                                        port = INBOUND_PORT;
                         } else {
-                                // try using INTERNAL_PORT as default
-                                port = INTERNAL_PORT;
+                                // try using INBOUND_PORT as default
+                                port = INBOUND_PORT;
                         }
 
                         memset(&sa, 0, sizeof(sa));
                         sa.sin_family = AF_INET;
                         sa.sin_port = htons(port);
-                        if (!inet_aton(buf, &sa-sin_addr.s_addr)) {
+                        sa.sin_addr.s_addr = inet_addr(buf);
+                        if (sa.sin_addr.s_addr < 0) {
                                 printf("Warning: invalid address provided for master device\n");
                                 (void)fflush(stdout);
                                 return EADDRNOTAVAIL;
@@ -170,21 +173,11 @@ static int processCmd(char *buf)
 
 static void processMessage(char *buf, struct sockaddr_in sa)
 {
-        if (strstr(buf, "ping\n")) {
-                // master/slave ping - used check connection
-                unsigned int mode;
-
-                mode = control_getMode();
-
-                if (mode == CONTROL_MODE_MASTER) {
-                } else if (mode == CONTROL_MODE_SLAVE) {
-                        queueOutboundMessage("ping", strlen("ping")+1, sa);
-                }
-        } else if (strstr(buf, "statusping\n")) {
+        if (strstr(buf, "statusping\n")) {
                 // web ui ping - send system status
                 char *c;
                 size_t bytes;
-                song_t *s;
+                const song_t *s;
                 c = buf;
                 s = control_getQueue();
 
@@ -223,6 +216,16 @@ static void processMessage(char *buf, struct sockaddr_in sa)
                 }
 
                 queueOutboundMessage(buf, (c-buf), sa);
+        } else if (strstr(buf, "ping\n")) {
+                // master/slave ping - used check connection
+                unsigned int mode;
+
+                mode = control_getMode();
+
+                if (mode == CONTROL_MODE_MASTER) {
+                } else if (mode == CONTROL_MODE_SLAVE) {
+                        queueOutboundMessage("ping", strlen("ping")+1, sa);
+                }
         } else if (strstr(buf, "audio\n")) {
                 // audio data from master device
         } else if (strstr(buf, "cmd\n")) {
@@ -235,9 +238,9 @@ static void processMessage(char *buf, struct sockaddr_in sa)
                 printf("Command received:\n\"%s\"\n", cmd);
                 (void)fflush(stdout);
 
-                while (c != '\0' && (c-buf) < BUFFER_SIZE) {
-                        if (c == '\n' || (c-buf) >= BUFFER_SIZE) {
-                                c = '\0';
+                while (*c != '\0' && (c-buf) < BUFFER_SIZE) {
+                        if (*c == '\n' || (c-buf) >= BUFFER_SIZE) {
+                                *c = '\0';
                                 if ((err = processCmd(cmd)))
                                         break;
                                 ++c;
@@ -248,8 +251,8 @@ static void processMessage(char *buf, struct sockaddr_in sa)
                 }
 
                 if (err == EADDRNOTAVAIL) {
-                        queueOutboundMessage("invalid address provided\n",
-                                strlen("invalid address provided\n") + 1, sa);
+                        queueOutboundMessage("error=\"invalid address provided\"\n",
+                                strlen("error=\"invalid address provided\"\n") + 1, sa);
                 }
         } else {
                 printf("Invalid message received\n");
@@ -270,7 +273,7 @@ static void *receiverLoop(void *arg)
         int bytes_recv;
         unsigned int sa_len;
 
-        if (getSocketFD(PORT, &fd))
+        if (getSocketFD(INBOUND_PORT, &fd))
                 return NULL;
 
         while (loop) {
@@ -295,17 +298,20 @@ static void *senderLoop(void *arg)
 {
         int fd = 0;
 
-        if (getSocketFD(PORT, &fd))
+        if (getSocketFD(OUTBOUND_PORT, &fd))
                 return NULL;
 
         while (loop) {
                 // send all the messages in the queue
                 pthread_mutex_lock(&queue_mtx);
                 while (out_queue) {
-                        struct out_msg msg = out_queue;
+                        struct out_msg *msg = out_queue;
 
-                        (void)sendto(fd, msg->buf, strlen(msg->buf), 0,
-                                (struct sockaddr *)msg->out_addr, sizeof(*(msg->out_addr)));
+                        if (sendto(fd, msg->buf, strlen(msg->buf), 0,
+                            (struct sockaddr *)&(msg->out_addr), sizeof(msg->out_addr)) < 0) {
+                                printf("Warning (network.c): sendto failed (%s)\n", strerror(errno));
+                                (void)fflush(stdout);
+                        }
 
                         out_queue = msg->next;
                         free(msg);
@@ -336,19 +342,48 @@ int network_init(void)
 
 void network_cleanup(void)
 {
+        char buf[BUFFER_SIZE];
+
         loop = 0;
+
+        // send a blank message to allow receiverLoop to exit recvfrom()
+        // NOTE: Linux-specific
+        (void)sprintf(buf, "echo \"a\" > /dev/udp/localhost/%d", INBOUND_PORT);
+        if (system(buf)) {
+                printf("Error (network.c): unable to send blank message to close app, close manually?\n");
+                (void)fflush(stdout);
+        }
+
         (void)pthread_join(th_rx, NULL);
         (void)pthread_join(th_tx, NULL);
 }
 
 void network_sendPlayCmd(void)
 {
+        // TODO
+        printf("Notice (network.c): network_sendPlayCmd() called\n");
+        (void)fflush(stdout);
 }
 
 void network_sendPauseCmd(void)
 {
+        // TODO
+        printf("Notice (network.c): network_sendPauseCmd() called\n");
+        (void)fflush(stdout);
 }
 
 void network_sendSkipCmd(void)
 {
+        // TODO
+        printf("Notice (network.c): network_sendSkipCmd() called\n");
+        (void)fflush(stdout);
+}
+
+void network_sendAudio(char *buf, int len)
+{
+        // TODO
+        printf("Notice (network.c): network_sendAudio() called\n");
+        (void)fflush(stdout);
+        (void)buf;
+        (void)len;
 }

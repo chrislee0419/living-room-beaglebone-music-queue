@@ -12,10 +12,10 @@ enum control_mode {
         CONTROL_MODE_SLAVE
 };
 
-typedef struct {
+typedef struct song {
         char fn[CONTROL_MAXLEN_FN];
         char url[CONTROL_MAXLEN_URL];
-        song_t *next;
+        struct song *next;
 } song_t;
 
 /**
@@ -95,7 +95,7 @@ void control_removeSong(char *url);
  * Produce a string containing the queue
  * @return Linked list of song_t objects
  */
-song_t *control_getQueue(void);
+const song_t *control_getQueue(void);
 
 /**
  * Get the next song in the queue
