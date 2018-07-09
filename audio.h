@@ -21,11 +21,11 @@ void audio_setSong(char *fn);
 /**
  * Resume playing the current song
  */
-void audio_playAudio(void);
+void audio_resume(void);
 
 /**
  * Pause the song
  */
-void audio_pauseAudio(void);
+void audio_pause(void);
 
 #endif
