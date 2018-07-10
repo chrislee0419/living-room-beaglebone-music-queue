@@ -5,7 +5,7 @@
 // Space is dynamically allocated; must be freed correctly!
 int playwav(void)
 {
-	printf("Beginning play-back of %s\n", OUTFILE);
+	printf("Playing %s\n", OUTFILE);
 
 	// Configure Output Device
 	snd_pcm_t *handle = Audio_openDevice();

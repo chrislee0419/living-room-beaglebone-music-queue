@@ -1,6 +1,9 @@
 #ifndef _AUDIO_H_
 #define _AUDIO_H_
 
+#include <stdio.h>
+#include "mp3towav.h"
+
 /**
  * Initializes this module
  * @return 0 if successful, otherwise error
