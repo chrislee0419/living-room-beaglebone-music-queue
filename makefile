@@ -8,14 +8,18 @@ LFLAGS = -L$(HOME)/cmpt433/public/asound_lib_BBB
 
 SRCS = $(wildcard *.c)
 
-
-all: app
+all: app node
 
 app:
 	$(CC_C) $(CFLAGS) $(SRCS) -o $(OUTDIR)/$(OUTFILE)
 
+node:
+	mkdir -p $(OUTDIR)/music-player-nodejs-copy/
+	cp -R nodejs/* $(OUTDIR)/music-player-nodejs-copy/ 
+
 clean:
 	rm $(OUTDIR)/$(OUTFILE)
+	rm -R $(OUTDIR)/music-player-nodejs-copy/ 
 
 audio:
 	$(CC_C) $(CFLAGS)  $(LFLAGS) mp3towav.c playwav.c -lpthread -lasound -o$(OUTDIR)/mp3towav

@@ -1,0 +1,9 @@
+{
+	"name": "bbg-music-player-server",
+	"version": "0.0.1",
+	"description": "BBG Music Player Server",
+	"dependencies": {
+		"socket.io": "~0.9.6",
+		"mime": "~1.2.7"
+	}
+}
