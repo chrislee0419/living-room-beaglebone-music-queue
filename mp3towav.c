@@ -6,28 +6,35 @@
 // on target: apt install lame
 //
 
-#include <stdio.h>
-#include <stdlib.h>
-// #include <alsa/asoundlib.h>
-#include <string.h>
-#include <stdbool.h>
-//#include "lame/lame.h"
-#include "playwav.c"
+// #include <stdio.h>
+// #include <stdlib.h>
+// // #include <alsa/asoundlib.h>
+// #include <string.h>
+// #include <stdbool.h>
+// //#include "lame/lame.h"
+// #include "playwav.c"
+//
+// #define INFILE "audiofiles/test1.mp3"
+// #define extern OUTFILE "audiofiles/out.wav"
+// #define MAX_LENGTH 1000
+//
+// _Bool running = true;
+// _Bool playing = false;
+//
 
-#define INFILE "audiofiles/test1.mp3"
-#define OUTFILE "audiofiles/out.wav"
-#define MAX_LENGTH 1000
-
-_Bool running = true;
-_Bool playing = false;
+#include "mp3towav.h"
 
 int main(int argc, char* argv[])
 {
   char command[MAX_LENGTH];
 
   // strcpy(command, "touch audiofiles/output.wav");
-  strcpy(command, "lame --decode audiofiles/test1.mp3 audiofiles/output.wav");
+  printf("Converting file test1.mp3...\n");
+  strcpy(command, "lame --decode audiofiles/test1.mp3 audiofiles/out.wav");
   system(command);
+  printf("Finished converting,\n");
+
+  playwav();
 
 
   //
@@ -43,14 +50,16 @@ int main(int argc, char* argv[])
   //
   // fclose(mp3);
   // fclose(wav);
-  while (running)
-  {
-    printf("running\n");
-    if(playing)
-    {
-      printf("playing\n");
-    }
-  }
+
+
+  // while (running)
+  // {
+  //   printf("running\n");
+  //   if (playing == true)
+  //   {
+  //     printf("playing\n");
+  //   }
+  // }
 
   return 0;
 }

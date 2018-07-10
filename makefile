@@ -4,6 +4,8 @@ OUTDIR = $(HOME)/cmpt433/public/myApps
 CC_C = arm-linux-gnueabihf-gcc
 CFLAGS = -Wall -g -std=c99 -D _POSIX_C_SOURCE=200809L -Werror -pthread
 
+LFLAGS = -L$(HOME)/cmpt433/public/asound_lib_BBB
+
 SRCS = $(wildcard *.c)
 
 
@@ -16,4 +18,4 @@ clean:
 	rm $(OUTDIR)/$(OUTFILE)
 
 audio:
-	$(CC_C) $(CFLAGS) mp3towav.c -o $(OUTDIR)/mp3towav
+	$(CC_C) $(CFLAGS)  $(LFLAGS) -pg mp3towav.c playwav.c -lpthread -lasound -o$(OUTDIR)/mp3towav
