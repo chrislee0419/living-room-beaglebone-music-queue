@@ -1,0 +1,11 @@
+cmd
+volup
+voldown
+play
+pause
+skip
+addsong=song1
+rmsong=song1
+repeat=1
+mode=master
+mode=slave,192.168.7.1:12345

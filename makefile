@@ -6,7 +6,8 @@ CFLAGS = -Wall -g -std=c99 -D _POSIX_C_SOURCE=200809L -Werror -pthread
 
 LFLAGS = -L$(HOME)/cmpt433/public/asound_lib_BBB
 
-SRCS = $(wildcard *.c)
+SRCS = main.c network.c control.c
+#SRCS = $(wildcard *.c)
 
 all: app node
 

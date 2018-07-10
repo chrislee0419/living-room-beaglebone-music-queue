@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include <pthread.h>
+#include <semaphore.h>
 #include <errno.h>
 
 #include "network.h"
@@ -33,8 +34,6 @@
 
 #define VOL_DIFF                5
 
-#define QUEUE_POLL_TIME_NS      5e7
-
 static int loop = 0;
 static pthread_t th_rx;
 static pthread_t th_tx;
@@ -47,7 +46,7 @@ struct out_msg {
 
 static struct out_msg *out_queue = NULL;
 static pthread_mutex_t queue_mtx = PTHREAD_MUTEX_INITIALIZER;
-static struct timespec timer = { .tv_nsec = QUEUE_POLL_TIME_NS };
+static sem_t queue_sem;
 
 /**
  * Helper functions
@@ -90,13 +89,20 @@ static void queueOutboundMessage(char *buf, unsigned int buf_size, struct sockad
         msg->out_addr = sa;
 
         pthread_mutex_lock(&queue_mtx);
-        if (out_queue) {
-                elem = out_queue;
-                while (elem->next)
-                        elem = elem->next;
-                elem->next = msg;
-        } else {
-                out_queue = msg;
+        {
+                if (out_queue) {
+                        elem = out_queue;
+                        while (elem->next)
+                                elem = elem->next;
+                        elem->next = msg;
+                } else {
+                        out_queue = msg;
+                }
+
+                if (sem_post(&queue_sem) < 0) {
+                        printf("Warning (network.c): semaphore is full, a message may be lost\n");
+                        (void)fflush(stdout);
+                }
         }
         pthread_mutex_unlock(&queue_mtx);
 
@@ -191,7 +197,7 @@ static int processCmd(char *buf)
                         buf += CMD_SLAVE_OFFSET;
 
                         if ((c = strchr(buf, ':'))) {
-                                c = '\0';
+                                *c = '\0';
                                 ++c;
 
                                 port = atoi(c);
@@ -216,7 +222,7 @@ static int processCmd(char *buf)
                         control_setSlaveMode(sa);
                 }
         } else {
-                printf("Warning (network.c): invalid command received\n");
+                printf("Warning (network.c): invalid command received (\"%s\")\n", buf);
                 (void)fflush(stdout);
                 return EINVAL;
         }
@@ -311,15 +317,20 @@ static void *receiverLoop(void *arg)
 static void *senderLoop(void *arg)
 {
         int fd = 0;
+        struct out_msg *msg;
 
         if (getSocketFD(OUTBOUND_PORT, &fd))
                 return NULL;
 
         while (loop) {
-                // send all the messages in the queue
+                if (sem_wait(&queue_sem) < 0)
+                        continue;
+                if (!out_queue)
+                        continue;
+
                 pthread_mutex_lock(&queue_mtx);
-                while (out_queue) {
-                        struct out_msg *msg = out_queue;
+                {
+                        msg = out_queue;
 
                         if (sendto(fd, msg->buf, strlen(msg->buf), 0,
                             (struct sockaddr *)&(msg->out_addr), sizeof(msg->out_addr)) < 0) {
@@ -329,10 +340,9 @@ static void *senderLoop(void *arg)
 
                         out_queue = msg->next;
                         free(msg);
+                        msg = NULL;
                 }
                 pthread_mutex_unlock(&queue_mtx);
-
-                (void)nanosleep(&timer, NULL);
         }
         return NULL;
 }
@@ -345,6 +355,8 @@ int network_init(void)
         int err = 0;
 
         loop = 1;
+
+        (void)sem_init(&queue_sem, 0, 0);
 
         if ((err = pthread_create(&th_rx, NULL, receiverLoop, NULL)))
                 printf("Error (network.c): unable to create thread for incoming UDP connections\n");
