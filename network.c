@@ -102,8 +102,61 @@ static void queueOutboundMessage(char *buf, unsigned int buf_size, struct sockad
 
         return;
 out:
-        printf("Warning: unable to allocate memory for outbound message\n");
+        printf("Warning (network.c): unable to allocate memory for outbound message\n");
         (void)fflush(stdout);
+}
+
+static int queueSystemStatusMessage(struct sockaddr_in sa)
+{
+        char buf[BUFFER_SIZE] = {0};
+        char *c;
+        size_t bytes;
+        const song_t *s;
+
+        c = buf;
+        s = control_getQueue();
+
+        bytes = sprintf(c, "vol=%d\n", control_getVolume());
+        if (!bytes)
+                goto out;
+        c += bytes;
+
+        bytes = sprintf(c, "repeat=%d\n", control_getRepeatStatus());
+        if (!bytes)
+                goto out;
+        c += bytes;
+
+        bytes = sprintf(c, "queue=");
+        if (!bytes)
+                goto out;
+        c += bytes;
+
+        while (s) {
+                if ((c-buf) >= BUFFER_SIZE - CONTROL_MAXLEN_URL - QUEUE_OFFSET) {
+                        queueOutboundMessage(buf, (c-buf), sa);
+                        (void)memset(buf, 0, BUFFER_SIZE);
+                        c = buf;
+
+                        bytes = sprintf(c, "queue=");
+                        if (!bytes)
+                                goto out;
+                        c += bytes;
+                }
+
+                bytes = sprintf(c, "%s,", s->url);
+                if (!bytes)
+                        goto out;
+                c += bytes;
+                s = s->next;
+        }
+
+        queueOutboundMessage(buf, (c-buf), sa);
+
+        return 0;
+out:
+        printf("Warning (network.c): failed to build system status string\n");
+        (void)fflush(stdout);
+        return errno;
 }
 
 static int processCmd(char *buf)
@@ -155,7 +208,7 @@ static int processCmd(char *buf)
                         sa.sin_port = htons(port);
                         sa.sin_addr.s_addr = inet_addr(buf);
                         if (sa.sin_addr.s_addr < 0) {
-                                printf("Warning: invalid address provided for master device\n");
+                                printf("Warning (network.c): invalid address provided for master device\n");
                                 (void)fflush(stdout);
                                 return EADDRNOTAVAIL;
                         }
@@ -163,7 +216,7 @@ static int processCmd(char *buf)
                         control_setSlaveMode(sa);
                 }
         } else {
-                printf("Invalid command received\n");
+                printf("Warning (network.c): invalid command received\n");
                 (void)fflush(stdout);
                 return EINVAL;
         }
@@ -175,47 +228,7 @@ static void processMessage(char *buf, struct sockaddr_in sa)
 {
         if (strstr(buf, "statusping\n")) {
                 // web ui ping - send system status
-                char *c;
-                size_t bytes;
-                const song_t *s;
-                c = buf;
-                s = control_getQueue();
-
-                bytes = sprintf(c, "vol=%d\n", control_getVolume());
-                if (!bytes)
-                        goto out;
-                c += bytes;
-
-                bytes = sprintf(c, "repeat=%d\n", control_getRepeatStatus());
-                if (!bytes)
-                        goto out;
-                c += bytes;
-
-                bytes = sprintf(c, "queue=");
-                if (!bytes)
-                        goto out;
-                c += bytes;
-
-                while (s) {
-                        if ((c-buf) >= BUFFER_SIZE - CONTROL_MAXLEN_URL - QUEUE_OFFSET) {
-                                queueOutboundMessage(buf, (c-buf), sa);
-                                (void)memset(buf, 0, BUFFER_SIZE);
-                                c = buf;
-
-                                bytes = sprintf(c, "queue=");
-                                if (!bytes)
-                                        goto out;
-                                c += bytes;
-                        }
-
-                        bytes = sprintf(c, "%s,", s->url);
-                        if (!bytes)
-                                goto out;
-                        c += bytes;
-                        s = s->next;
-                }
-
-                queueOutboundMessage(buf, (c-buf), sa);
+                (void)queueSystemStatusMessage(sa);
         } else if (strstr(buf, "ping\n")) {
                 // master/slave ping - used check connection
                 unsigned int mode;
@@ -235,7 +248,7 @@ static void processMessage(char *buf, struct sockaddr_in sa)
                 cmd = buf + CMD_OFFSET;
                 c = cmd;
 
-                printf("Command received:\n\"%s\"\n", cmd);
+                printf("Notice (network.c): command received:\n\"%s\"\n", cmd);
                 (void)fflush(stdout);
 
                 while (*c != '\0' && (c-buf) < BUFFER_SIZE) {
@@ -253,16 +266,17 @@ static void processMessage(char *buf, struct sockaddr_in sa)
                 if (err == EADDRNOTAVAIL) {
                         queueOutboundMessage("error=\"invalid address provided\"\n",
                                 strlen("error=\"invalid address provided\"\n") + 1, sa);
+                } else {
+                        (void)queueSystemStatusMessage(sa);
                 }
         } else {
-                printf("Invalid message received\n");
+                printf("Warning (network.c): invalid message received\n");
                 (void)fflush(stdout);
+                queueOutboundMessage("error=\"invalid message\"\n",
+                        strlen("error=\"invalid message\"\n") + 1, sa);
         }
 
         return;
-out:
-        printf("Warning (network.c): failed to build system status string\n");
-        (void)fflush(stdout);
 }
 
 static void *receiverLoop(void *arg)
