@@ -18,4 +18,4 @@ clean:
 	rm $(OUTDIR)/$(OUTFILE)
 
 audio:
-	$(CC_C) $(CFLAGS)  $(LFLAGS) -pg mp3towav.c playwav.c -lpthread -lasound -o$(OUTDIR)/mp3towav
+	$(CC_C) $(CFLAGS)  $(LFLAGS) mp3towav.c playwav.c -lpthread -lasound -o$(OUTDIR)/mp3towav
