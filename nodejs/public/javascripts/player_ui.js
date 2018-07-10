@@ -54,19 +54,38 @@ var songQueue = [];
 // Submits input link to server
 function submitSongLink() {
 	// Get form input
+	var songUrl = $('#new-song-input').val();
+	var videoId = youtube_parser(songUrl);
 
-	// Clear form input
+	if (!videoId) {
+		return;
+	}
 
 	// Send to server
+	sendServerCommand("addsong " + videoId);
+
+	// Clear form input
+	$('#new-song-input').val("");
+
+	addSongLink(videoId);
 }
 
+var apiKey = "AIzaSyAZkC1t4CApwcbyk-JOTVxe5QQVHfblw9g";
+
 // Adds a song to end of the list
-function addSongLink(songUrl) {
+function addSongLink(videoId) {
+	console.log("Adding video id ", videoId);
+
 	// Check Youtube link
+	$.get("https://www.googleapis.com/youtube/v3/videos?id=" + videoId + "&key=" + apiKey + "&part=snippet,contentDetails", 
+		function(data) {
+			// Get youtube video title
+			var videoTitle = data.items[0].snippet.title;
+			var videoDuration = data.items[0].contentDetails.duration;
 
-	// Get youtube video title
-
-	// Add to song list table HTML
+			// Add to song list table HTML
+			addSongToTableHtml(videoId, videoTitle, videoDuration);
+	})
 }
 
 // Finds the input URL in current list, then removes it
@@ -74,6 +93,24 @@ function removeSongLink(songUrl) {
 	// Find the song url
 
 	// If it exists, remove it and update the table HTML
+}
+
+function addSongToTableHtml(videoId, videoTitle, duration) {
+	const newRowHtmlString = `<tr>
+		<td></td>
+	    <td><a href="${videoId}">${videoTitle}</a></td>
+	    <td>${duration}</td>
+	    <td></td>
+	`;
+
+	$("#song-list").append(newRowHtmlString);
+}
+
+// Taken from https://stackoverflow.com/questions/3452546/how-do-i-get-the-youtube-video-id-from-a-url
+function youtube_parser(url){
+    var regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#\&\?]*).*/;
+    var match = url.match(regExp);
+    return (match&&match[7].length==11)? match[7] : false;
 }
 
 
