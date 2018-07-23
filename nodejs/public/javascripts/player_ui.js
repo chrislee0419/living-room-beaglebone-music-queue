@@ -8,7 +8,6 @@
 const POLL_INTERVAL_MS = 1000;
 const UPDATE_TIMEOUT = 5000;
 const ERROR_DISPLAY_TIME = 2000;
-const COMMAND_DELIM = ";"
 
 var socket = io.connect();
 
@@ -39,8 +38,17 @@ $(document).ready(function() {
 //
 // Sending commands to the server
 //
+const CMD_VOLUME_UP   = "volup";
+const CMD_VOLUME_DOWN = "voldown";
+const CMD_PLAY        = "play";
+const CMD_PAUSE       = "pause";
+const CMD_SKIP        = "skip";
+const CMD_ADD_SONG    = "addsong=";
+const CMD_REMOVE_SONG = "rmsong=";
+const CMD_REPEAT_SONG = "repeat=";
+
 function sendServerCommand(data) {
-	socket.emit('clientCommand', data);
+	socket.emit('clientCommand', 'cmd ' + data);
 };
 
 
@@ -62,7 +70,7 @@ function submitSongLink() {
 	}
 
 	// Send to server
-	sendServerCommand("addsong " + videoId);
+	sendServerCommand(CMD_ADD_SONG + videoId);
 
 	// Clear form input
 	$('#new-song-input').val("");
@@ -120,10 +128,10 @@ function youtube_parser(url){
 var isPlaying = false;
 function sendPlayPause() {
 	if (isPlaying) {
-		sendServerCommand("pause")
+		sendServerCommand(CMD_PAUSE)
 	}
 	else {
-		sendServerCommand("play")
+		sendServerCommand(CMD_PLAY)
 	}
 	setPlayPauseDisplay(!isPlaying);
 }
@@ -170,6 +178,8 @@ function pollServer() {
 //
 // Handling server commands
 //
+const COMMANDS_DELIM = ";\n";
+const COMMAND_DELIM = " =";
 
 // Handles multiple commands seperated by COMMAND_DELIM
 function handleServerCommands(data) {
@@ -181,7 +191,7 @@ function handleServerCommands(data) {
 
 // Handles single command
 function handleServerCommand(command) {
-	var parsedWords = command.split(" ");
+	var parsedWords = command.split(COMMAND_DELIM);
 	if (parsedWords.length == 0) {
 		return;
 	}
@@ -196,9 +206,13 @@ function handleServerCommand(command) {
 
 		case "pause":
 			setPlayPauseDisplay(false);
+			break;
 
-		case "volume":
+		case "vol":
 			setDisplayVolume(subCommand);
+			break;
+
+		case "queue":
 			break;
 
 		case "nodejsping":
