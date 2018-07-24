@@ -1,9 +1,10 @@
-"use strict";
 /*
 	player_ui.js
 
 	Manages front-end behaviour
 */
+
+"use strict";
 
 const POLL_INTERVAL_MS = 1000;
 const UPDATE_TIMEOUT = 5000;
@@ -37,7 +38,8 @@ $(document).ready(function() {
 
 //
 // Sending commands to the server
-//
+//========================================================================
+
 const CMD_VOLUME_UP   = "volup";
 const CMD_VOLUME_DOWN = "voldown";
 const CMD_PLAY        = "play";
@@ -48,13 +50,13 @@ const CMD_REMOVE_SONG = "rmsong=";
 const CMD_REPEAT_SONG = "repeat=";
 
 function sendServerCommand(data) {
-	socket.emit('clientCommand', 'cmd ' + data);
+	socket.emit('clientCommand', 'cmd\n' + data);
 };
 
 
 //
 // Song Queue
-//
+//========================================================================
 
 // This 
 var songQueue = [];
@@ -82,8 +84,6 @@ var apiKey = "AIzaSyAZkC1t4CApwcbyk-JOTVxe5QQVHfblw9g";
 
 // Adds a song to end of the list
 function addSongLink(videoId) {
-	console.log("Adding video id ", videoId);
-
 	// Check Youtube link
 	$.get("https://www.googleapis.com/youtube/v3/videos?id=" + videoId + "&key=" + apiKey + "&part=snippet,contentDetails", 
 		function(data) {
@@ -97,7 +97,7 @@ function addSongLink(videoId) {
 }
 
 // Finds the input URL in current list, then removes it
-function removeSongLink(songUrl) {
+function removeSongLink(videoId) {
 	// Find the song url
 
 	// If it exists, remove it and update the table HTML
@@ -122,9 +122,19 @@ function youtube_parser(url){
 }
 
 
+function resetQueue(data) {
+	// Queue data is video IDs separated by delimiters
+	var videoIds = data.split(';');
+	for (var videoId in videoIds) {
+		addSongLink(videoId);
+	}
+}
+
+
 //
 // Play/Pause
-//
+//========================================================================
+
 var isPlaying = false;
 function sendPlayPause() {
 	if (isPlaying) {
@@ -151,7 +161,8 @@ function setPlayPauseDisplay(isPlayingInput) {
 
 //
 // Volume functions
-//
+//========================================================================
+
 function setServerVolume(newVolume) {
 	sendServerCommand("volume " + newVolume); 
 }
@@ -166,7 +177,7 @@ function setDisplayVolume(newVolume) {
 
 
 function pollServer() {
-	sendServerCommand("update");
+	socket.emit('clientCommand', 'statusping\n');
 	window.setTimeout(pollServer, POLL_INTERVAL_MS);
 
 	if ((Date.now() - lastUpdateTimeNodejs) > UPDATE_TIMEOUT) {
@@ -177,16 +188,19 @@ function pollServer() {
 
 //
 // Handling server commands
-//
-const COMMANDS_DELIM = ";\n";
-const COMMAND_DELIM = " =";
+//========================================================================
+
+const COMMANDS_DELIM = /[;\n]/;
+const COMMAND_DELIM = /[ =]/;
 
 // Handles multiple commands seperated by COMMAND_DELIM
 function handleServerCommands(data) {
-	var commands = data.split(COMMAND_DELIM);
+	var commands = data.split(COMMANDS_DELIM);
 	for (var i in commands) {
 		handleServerCommand(commands[i]);
 	}
+
+	lastUpdateTimeNodejs = Date.now();
 }
 
 // Handles single command
@@ -213,10 +227,7 @@ function handleServerCommand(command) {
 			break;
 
 		case "queue":
-			break;
-
-		case "nodejsping":
-			lastUpdateTimeNodejs = Date.now();
+			resetQueue(subCommand);
 			break;
 
 		default:

@@ -22,7 +22,7 @@ function handleCommand(socket) {
 	socket.on('clientCommand', function(data) {
 		console.log('clientCommand: ' + data);
 
-		if (data == "update") {
+		if (data == "statusping") {
 			socket.emit('serverReply', "nodejsping");
 		}
 		
