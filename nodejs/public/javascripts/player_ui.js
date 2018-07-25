@@ -106,7 +106,7 @@ function removeSongLink(videoId) {
 function addSongToTableHtml(videoId, videoTitle, duration) {
 	const newRowHtmlString = `<tr>
 		<td></td>
-	    <td><a href="${videoId}">${videoTitle}</a></td>
+	    <td><a href="https://www.youtube.com/watch?v=${videoId}">${videoTitle}</a></td>
 	    <td>${duration}</td>
 	    <td></td>
 	`;
