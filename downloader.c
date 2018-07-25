@@ -7,8 +7,8 @@
 #include "downloader.h"
 
 #define CMDLINE_MAX_LEN 1024
-static const char* DOWNLOAD_CMDLINE = "youtube-dl --extract-audio --audio-format wav -o 'cache/%%(id)s.%%(ext)s' https://www.youtube.com/watch?v=%s";
-static const char* RM_CACHE_CMDLINE = "rm cache/*";
+static const char* DOWNLOAD_CMDLINE = "youtube-dl --extract-audio --audio-format wav -o '~/cache/%%(id)s.%%(ext)s' https://www.youtube.com/watch?v=%s";
+static const char* RM_CACHE_CMDLINE = "rm ~/cache/*";
 static const char* WAV_EXT = ".wav";
 
 /*
