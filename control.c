@@ -6,7 +6,7 @@
 
 #include "control.h"
 
-#define NUM_SONGS_TO_DOWNLOAD 5
+#define NUM_SONGS_TO_DOWNLOAD 3
 
 static song_t *song_list = NULL;
 
@@ -15,6 +15,8 @@ static song_t *song_list = NULL;
  * Forward declations
  */
 void updateDownloadedSongs();
+
+void debugPrintSongList();
 
 /*
  * Public functions
@@ -120,9 +122,11 @@ void control_addSong(char *url)
         printf("Notice (control.c): control_addSong() got %s\n", url);
         (void)fflush(stdout);
 
-        song_t *new_song = malloc(sizeof(song_t));
-        strcpy("", new_song->filepath);
-        strcpy(url, new_song->vid);
+        song_t* new_song = malloc(sizeof(song_t));
+
+        strcpy(new_song->filepath, "");
+        strcpy(new_song->vid, url);
+
         new_song->next = NULL;
         new_song->status = SONG_STATUS_QUEUED;
 
@@ -141,6 +145,7 @@ void control_addSong(char *url)
 
         // Download songs if needed
         updateDownloadedSongs();
+        debugPrintSongList();
 }
 
 void control_removeSong(char *url)
@@ -223,7 +228,7 @@ void updateDownloadedSongs()
 
                 if (current_song->status == SONG_STATUS_LOADING
                         || current_song->status == SONG_STATUS_LOADED) {
-                        continue;
+                        // Do nothing
                 }
                 else if (current_song->status == SONG_STATUS_QUEUED) {
                         // Download the song in new thread
@@ -233,9 +238,35 @@ void updateDownloadedSongs()
                         current_song->status = SONG_STATUS_LOADING;
                 }
                 else if (current_song->status == SONG_STATUS_REMOVED) {
+                        // Tried to remove song while downloading
+                        // Remove it here now
                         control_removeSong(current_song->vid);
                 }
 
+                current_song = current_song->next;
+        }
+}
+
+void debugPrintSongList()
+{
+        song_t* current_song = song_list;
+        while (current_song) {
+                char statusStr[10];
+                switch (current_song->status) {
+                        case SONG_STATUS_QUEUED:
+                                strcpy(statusStr, "QUEUED");
+                                break;
+                        case SONG_STATUS_LOADING:
+                                strcpy(statusStr, "LOADING");
+                                break;
+                        case SONG_STATUS_LOADED:
+                                strcpy(statusStr, "LOADED");
+                                break;
+                        case SONG_STATUS_REMOVED:
+                                strcpy(statusStr, "REMOVED");
+                                break;
+                }
+                printf("file=[%s], id=[%s], status=[%s]\n", current_song->filepath, current_song->vid, statusStr);
                 current_song = current_song->next;
         }
 }

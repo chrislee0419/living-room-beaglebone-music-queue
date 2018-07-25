@@ -50,7 +50,7 @@ const CMD_REMOVE_SONG = "rmsong=";
 const CMD_REPEAT_SONG = "repeat=";
 
 function sendServerCommand(data) {
-	socket.emit('clientCommand', 'cmd\n' + data);
+	socket.emit('clientCommand', 'cmd\n' + data + '\n');
 };
 
 

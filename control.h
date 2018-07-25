@@ -22,8 +22,9 @@ enum song_status {
 typedef struct song {
         char filepath[CONTROL_MAXLEN_FN];	// filepath to wav data
         char vid[CONTROL_MAXLEN_URL];	// YouTube video ID
-        struct song *next;				// Next song in the queue
         enum song_status status;
+
+        struct song *next;				// Next song in the queue
 } song_t;
 
 /**

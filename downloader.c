@@ -8,6 +8,7 @@
 
 #define CMDLINE_MAX_LEN 1024
 static const char* DOWNLOAD_CMDLINE = "youtube-dl --extract-audio --audio-format wav -o 'cache/%%(id)s.%%(ext)s' https://www.youtube.com/watch?v=%s";
+static const char* RM_CACHE_CMDLINE = "rm cache/*";
 static const char* WAV_EXT = ".wav";
 
 /*
@@ -22,11 +23,13 @@ static void* downloadThread(void *args);
 void downloader_init(void) 
 {
 	// Clear cache
+	system(RM_CACHE_CMDLINE);
 }
 
 void downloader_cleanup(void) 
 {
 	// Clear cache
+	system(RM_CACHE_CMDLINE);
 }
 
 void downloader_downloadSong(song_t* song) 
@@ -52,16 +55,15 @@ static void* downloadThread(void *args)
 	char cmdline[CMDLINE_MAX_LEN];
 	sprintf(cmdline, DOWNLOAD_CMDLINE, song->vid);
 
-
-	printf("downloadAndProcessThread attempting to download vid=%s", song->vid);
-
-	// Record download location
-	//system(cmdline);
+	system(cmdline);
 
 	// Update song with .wav filepath
 	strcat(song->filepath, "cache/");
 	strcat(song->filepath, song->vid);
 	strcat(song->filepath, WAV_EXT);
+
+	// Update song status
+	song->status = SONG_STATUS_LOADED;
 
 	return 0;
 }
