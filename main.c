@@ -1,8 +1,10 @@
 #include <pthread.h>
 #include <stdio.h>
 
-#include "main.h"
+#include "control.h"
 #include "network.h"
+
+#include "main.h"
 
 static pthread_mutex_t mainMutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -10,7 +12,10 @@ static int initializeModules()
 {
         int err = 0;
 
-	printf("Initializing modules\n");
+		printf("Initializing modules\n");
+
+
+        err |= control_init();
 
 	// TODO: Web interface
 

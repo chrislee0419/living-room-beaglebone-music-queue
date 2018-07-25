@@ -111,8 +111,8 @@ void control_setRepeatStatus(int repeat)
 int control_getRepeatStatus(void)
 {
         // TODO
-        printf("Notice (control.c): control_getRepeatMode() called\n");
-        (void)fflush(stdout);
+        // printf("Notice (control.c): control_getRepeatStatus() called\n");
+        // (void)fflush(stdout);
         return 1;
 }
 
@@ -168,8 +168,8 @@ void control_removeSong(char *url)
 const song_t *control_getQueue(void)
 {
         // TODO
-        printf("Notice (control.c): control_getQueue() called\n");
-        (void)fflush(stdout);
+        // printf("Notice (control.c): control_getQueue() called\n");
+        // (void)fflush(stdout);
         return NULL;
 }
 
@@ -191,8 +191,8 @@ void control_setVolume(unsigned int vol)
 unsigned int control_getVolume(void)
 {
         // TODO
-        printf("Notice (control.c): control_getVolume() called\n");
-        (void)fflush(stdout);
+        // printf("Notice (control.c): control_getVolume() called\n");
+        // (void)fflush(stdout);
         return 80;
 }
 
@@ -232,7 +232,7 @@ void updateDownloadedSongs()
                 }
                 else if (current_song->status == SONG_STATUS_QUEUED) {
                         // Download the song in new thread
-                        downloader_downloadSong(current_song);
+                        downloader_queueDownloadSong(current_song);
 
                         // Update song status
                         current_song->status = SONG_STATUS_LOADING;
