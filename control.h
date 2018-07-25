@@ -12,10 +12,18 @@ enum control_mode {
         CONTROL_MODE_SLAVE
 };
 
+enum song_status {
+        SONG_STATUS_QUEUED,
+        SONG_STATUS_LOADING,
+        SONG_STATUS_LOADED,
+        SONG_STATUS_REMOVED		// When song is removed while downloading
+};
+
 typedef struct song {
-        char fn[CONTROL_MAXLEN_FN];
-        char url[CONTROL_MAXLEN_URL];
-        struct song *next;
+        char filepath[CONTROL_MAXLEN_FN];	// filepath to wav data
+        char vid[CONTROL_MAXLEN_URL];	// YouTube video ID
+        struct song *next;				// Next song in the queue
+        enum song_status status;
 } song_t;
 
 /**

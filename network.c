@@ -149,7 +149,7 @@ static int queueSystemStatusMessage(struct sockaddr_in sa)
                         c += bytes;
                 }
 
-                bytes = sprintf(c, "%s,", s->url);
+                bytes = sprintf(c, "%s,", s->vid);
                 if (!bytes)
                         goto out;
                 c += bytes;

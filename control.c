@@ -1,6 +1,20 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "downloader.h"
 
 #include "control.h"
+
+#define NUM_SONGS_TO_DOWNLOAD 5
+
+static song_t *song_list = NULL;
+
+
+/*
+ * Forward declations
+ */
+void updateDownloadedSongs();
 
 /*
  * Public functions
@@ -10,14 +24,27 @@ int control_init(void)
         // TODO
         printf("Notice (control.c): control_init() called\n");
         (void)fflush(stdout);
+
+        downloader_init();
+
         return 0;
 }
 
 void control_cleanup(void)
 {
+        downloader_cleanup();
+
         // TODO
         printf("Notice (control.c): control_cleanup() called\n");
         (void)fflush(stdout);
+
+        song_t *current_song = song_list;
+        song_t *next_song = NULL;
+        while (current_song) {
+                next_song = current_song->next;
+                free(current_song);
+                current_song = next_song;
+        }
 }
 
 void control_setMasterMode(void)
@@ -92,6 +119,28 @@ void control_addSong(char *url)
         // TODO
         printf("Notice (control.c): control_addSong() got %s\n", url);
         (void)fflush(stdout);
+
+        song_t *new_song = malloc(sizeof(song_t));
+        strcpy("", new_song->filepath);
+        strcpy(url, new_song->vid);
+        new_song->next = NULL;
+        new_song->status = SONG_STATUS_QUEUED;
+
+        // Add to end of list
+        if (!song_list) {
+                song_list = new_song;
+        }
+        else {
+                song_t *current_song = song_list;
+                while (current_song->next != NULL) {
+                        current_song = current_song->next;
+                }
+
+                current_song->next = new_song;
+        }
+
+        // Download songs if needed
+        updateDownloadedSongs();
 }
 
 void control_removeSong(char *url)
@@ -99,6 +148,16 @@ void control_removeSong(char *url)
         // TODO
         printf("Notice (control.c): control_removeSong() got %s\n", url);
         (void)fflush(stdout);
+
+        // Find song in list
+
+
+
+        // Delete file from disk
+
+
+        // Download new songs if needed
+        updateDownloadedSongs();
 }
 
 const song_t *control_getQueue(void)
@@ -144,4 +203,39 @@ void control_verifySlaveStatus(struct sockaddr_in addr)
         // TODO
         printf("Notice (control.c): control_verifySlaveStatus() called\n");
         (void)fflush(stdout);
+}
+
+
+/*
+ * Private functions
+ */
+
+// Checks if any songs need to be downloaded and processed
+// Downloads them in a new background
+void updateDownloadedSongs()
+{
+        // Go through first N songs and download them if not already downloaded
+        song_t* current_song = song_list;
+        for (int i = 0; i < NUM_SONGS_TO_DOWNLOAD; i++) {
+                if (!current_song) {
+                        break;
+                } 
+
+                if (current_song->status == SONG_STATUS_LOADING
+                        || current_song->status == SONG_STATUS_LOADED) {
+                        continue;
+                }
+                else if (current_song->status == SONG_STATUS_QUEUED) {
+                        // Download the song in new thread
+                        downloader_downloadSong(current_song);
+
+                        // Update song status
+                        current_song->status = SONG_STATUS_LOADING;
+                }
+                else if (current_song->status == SONG_STATUS_REMOVED) {
+                        control_removeSong(current_song->vid);
+                }
+
+                current_song = current_song->next;
+        }
 }
