@@ -119,7 +119,7 @@ static void* downloadThread()
 		strcat(song->filepath, WAV_EXT);
 
 		// Update song status
-		song->status = SONG_STATUS_LOADED;
+		song->status = CONTROL_SONG_STATUS_LOADED;
 
 		song = dequeueSong();
 	}

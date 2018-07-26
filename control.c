@@ -57,7 +57,7 @@ static song_t *song_list = NULL;
  */
 
 // Checks if any songs need to be downloaded and processed
-// Downloads them in a new background
+// Downloads them in a new background thread
 void updateDownloadedSongs(void)
 {
         // Go through first N songs and download them if not already downloaded
@@ -67,18 +67,18 @@ void updateDownloadedSongs(void)
                         break;
                 } 
 
-                if (current_song->status == SONG_STATUS_LOADING
-                        || current_song->status == SONG_STATUS_LOADED) {
+                if (current_song->status == CONTROL_SONG_STATUS_LOADING
+                        || current_song->status == CONTROL_SONG_STATUS_LOADED) {
                         // Do nothing
                 }
-                else if (current_song->status == SONG_STATUS_QUEUED) {
+                else if (current_song->status == CONTROL_SONG_STATUS_QUEUED) {
                         // Download the song in new thread
                         downloader_queueDownloadSong(current_song);
 
                         // Update song status
-                        current_song->status = SONG_STATUS_LOADING;
+                        current_song->status = CONTROL_SONG_STATUS_LOADING;
                 }
-                else if (current_song->status == SONG_STATUS_REMOVED) {
+                else if (current_song->status == CONTROL_SONG_STATUS_REMOVED) {
                         // Tried to remove song while downloading
                         // Remove it here now
                         control_removeSong(current_song->vid);
@@ -94,16 +94,16 @@ void debugPrintSongList(void)
         while (current_song) {
                 char statusStr[10];
                 switch (current_song->status) {
-                        case SONG_STATUS_QUEUED:
+                        case CONTROL_SONG_STATUS_QUEUED:
                                 strcpy(statusStr, "QUEUED");
                                 break;
-                        case SONG_STATUS_LOADING:
+                        case CONTROL_SONG_STATUS_LOADING:
                                 strcpy(statusStr, "LOADING");
                                 break;
-                        case SONG_STATUS_LOADED:
+                        case CONTROL_SONG_STATUS_LOADED:
                                 strcpy(statusStr, "LOADED");
                                 break;
-                        case SONG_STATUS_REMOVED:
+                        case CONTROL_SONG_STATUS_REMOVED:
                                 strcpy(statusStr, "REMOVED");
                                 break;
                 }
@@ -120,14 +120,16 @@ static int loadNewSong(void)
         int bufEnd;
         short *buf;
 
+        // get new song from queue
+        pthread_mutex_lock(&mtx_queue);
         if (!song_queue)
                 return ENODATA;
 
-        // get new song from queue
-        pthread_mutex_lock(&mtx_queue);
         // check if the audio file has been downloaded
-        if (strlen(song_queue->fn) > 1)
+        if (song_queue->status != CONTROL_SONG_STATUS_LOADED) {
+                pthread_mutex_unlock(&mtx_queue);
                 return ENODATA;
+        }
 
         if (song_curr)
                 free(song_curr);
@@ -136,41 +138,41 @@ static int loadNewSong(void)
         song_queue = song_queue->next;
         pthread_mutex_unlock(&mtx_queue);
 
-	// Open file
-	file = fopen(song_curr->fn, "r");
-	if (file == NULL) {
-		printf(PRINTF_MODULE "Warning: Unable to open file %s.\n", song_curr->fn);
+        // Open file
+        file = fopen(song_curr->filepath, "r");
+        if (file == NULL) {
+                printf(PRINTF_MODULE "Warning: Unable to open file %s.\n", song_curr->filepath);
                 (void)fflush(stdout);
                 return EIO;
-	}
+        }
 
-	// Get file size
-	fseek(file, 0, SEEK_END);
-	sizeInBytes = ftell(file) - DATA_OFFSET_INTO_WAVE;
-	fseek(file, DATA_OFFSET_INTO_WAVE, SEEK_SET);
-	bufEnd = sizeInBytes / SAMPLE_SIZE;
+        // Get file size
+        fseek(file, 0, SEEK_END);
+        sizeInBytes = ftell(file) - DATA_OFFSET_INTO_WAVE;
+        fseek(file, DATA_OFFSET_INTO_WAVE, SEEK_SET);
+        bufEnd = sizeInBytes / SAMPLE_SIZE;
 
-	// Allocate Space
-	buf = malloc(sizeInBytes);
-	if (buf == NULL) {
-		printf(PRINTF_MODULE "Warning: Unable to allocate %d bytes for file %s.\n",
-                        sizeInBytes, song_curr->fn);
+        // Allocate Space
+        buf = malloc(sizeInBytes);
+        if (buf == NULL) {
+                printf(PRINTF_MODULE "Warning: Unable to allocate %d bytes for file %s.\n",
+                        sizeInBytes, song_curr->filepath);
                 (void)fflush(stdout);
                 fclose(file);
                 return ENOMEM;
-	}
+        }
 
-	// Read data:
-	samplesRead = fread(buf, SAMPLE_SIZE, bufEnd, file);
-	if (samplesRead != bufEnd) {
-		printf(PRINTF_MODULE "Warning: Unable to read %d samples from file %s (read %d).\n",
-			        bufEnd, song_curr->fn, samplesRead);
+        // Read data:
+        samplesRead = fread(buf, SAMPLE_SIZE, bufEnd, file);
+        if (samplesRead != bufEnd) {
+                printf(PRINTF_MODULE "Warning: Unable to read %d samples from file %s (read %d).\n",
+                        bufEnd, song_curr->filepath, samplesRead);
                 fclose(file);
                 free(buf);
                 return EIO;
-	}
+        }
 
-	fclose(file);
+        fclose(file);
 
         // copy data to au_buf
         pthread_mutex_lock(&mtx_audio);
@@ -563,7 +565,7 @@ void control_addSong(char *url)
         strcpy(new_song->vid, url);
 
         new_song->next = NULL;
-        new_song->status = SONG_STATUS_QUEUED;
+        new_song->status = CONTROL_SONG_STATUS_QUEUED;
 
         // Add to end of list
         if (!song_list) {
