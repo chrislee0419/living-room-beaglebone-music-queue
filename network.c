@@ -125,6 +125,7 @@ static int queueSystemStatusMessage(struct sockaddr_in sa)
         char *c;
         size_t bytes;
         const song_t *s;
+        int song_status;
 
         c = buf;
         s = control_getQueue();
@@ -140,6 +141,12 @@ static int queueSystemStatusMessage(struct sockaddr_in sa)
         c += bytes;
 
         bytes = sprintf(c, "repeat=%d\n", control_getRepeatStatus());
+        if (!bytes)
+                goto out;
+        c += bytes;
+
+        song_status = s ? s->status : CONTROL_SONG_STATUS_UNKNOWN;
+        bytes = sprintf(c, "song_status=%d\n", song_status);
         if (!bytes)
                 goto out;
         c += bytes;

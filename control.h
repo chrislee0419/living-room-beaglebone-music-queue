@@ -110,16 +110,10 @@ void control_removeSong(char *url);
 enum control_song_status control_setSongStatus(song_t *song, enum control_song_status status);
 
 /**
- * Produce a string containing the queue
+ * Get the song queue. First item is the current song
  * @return Linked list of song_t objects
  */
 const song_t *control_getQueue(void);
-
-/**
- * Get the next song in the queue
- * @return Address to the next song_t object (immutable)
- */
-const song_t *control_getNextSong(void);
 
 /**
  * Register a slave device

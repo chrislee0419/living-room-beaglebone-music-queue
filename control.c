@@ -644,14 +644,6 @@ const song_t *control_getQueue(void)
         return song_queue;
 }
 
-const song_t *control_getNextSong(void)
-{
-        // TODO
-        printf(PRINTF_MODULE "Notice: control_getNextSong() called\n");
-        (void)fflush(stdout);
-        return NULL;
-}
-
 void control_addSlave(struct sockaddr_in addr)
 {
         slave_dev_t *s = malloc(sizeof(slave_dev_t));
