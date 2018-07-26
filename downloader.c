@@ -138,7 +138,13 @@ static void* downloadThread()
 		strcat(song->filepath, WAV_EXT);
 
 		// Update song status
-		song->status = CONTROL_SONG_STATUS_LOADED;
+                int status = control_setSongStatus(song, CONTROL_SONG_STATUS_LOADED);
+
+                // Remove song if the status was set to removed
+                if (status == CONTROL_SONG_STATUS_REMOVED) {
+                        // TODO: remove song file if it isn't duplicated in the queue
+                        // should probably call control_removeSong
+                }
 
 		song = dequeueSong();
 	}

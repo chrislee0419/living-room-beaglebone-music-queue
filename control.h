@@ -13,6 +13,7 @@ enum control_mode {
 };
 
 enum control_song_status {
+        CONTROL_SONG_STATUS_UNKNOWN = -1,
         CONTROL_SONG_STATUS_QUEUED,
         CONTROL_SONG_STATUS_LOADING,
         CONTROL_SONG_STATUS_LOADED,
@@ -98,6 +99,15 @@ void control_addSong(char *url);
  * @param url YouTube URL of song in queue
  */
 void control_removeSong(char *url);
+
+/**
+ * Set the status of a song. Should be used for thread safety.
+ * NOTE: The song will be deleted if the song's status was set to CONTROL_SONG_STATUS_REMOVED
+ * @param song Address of song to change (must exist in the queue)
+ * @param status Status to set for the song
+ * @return Current status of the song; CONTROL_SONG_STATUS_UNKNOWN, if error
+ */
+enum control_song_status control_setSongStatus(song_t *song, enum control_song_status status);
 
 /**
  * Produce a string containing the queue

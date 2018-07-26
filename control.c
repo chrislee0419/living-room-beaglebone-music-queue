@@ -605,6 +605,37 @@ void control_removeSong(char *url)
         updateDownloadedSongs();
 }
 
+enum control_song_status control_setSongStatus(song_t *song, enum control_song_status status)
+{
+        song_t *s;
+
+        // prevent changing status to unknown state
+        if (status == CONTROL_SONG_STATUS_UNKNOWN)
+                return status;
+
+        pthread_mutex_lock(&mtx_queue);
+
+        // verify that the song is in the queue
+        s = song_queue;
+        while (s != song && s != NULL)
+                s = s->next;
+        if (!s) {
+                pthread_mutex_unlock(&mtx_queue);
+                return CONTROL_SONG_STATUS_UNKNOWN;
+        }
+
+        // if the song is set to be removed, we return that instead
+        if (s->status == CONTROL_SONG_STATUS_REMOVED) {
+                pthread_mutex_unlock(&mtx_queue);
+                return CONTROL_SONG_STATUS_REMOVED;
+        }
+
+        s->status = status;
+        pthread_mutex_unlock(&mtx_queue);
+
+        return status;
+}
+
 const song_t *control_getQueue(void)
 {
         return song_queue;
