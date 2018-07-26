@@ -3,7 +3,7 @@ OUTDIR = $(HOME)/cmpt433/public/myApps
 
 CC_C = arm-linux-gnueabihf-gcc
 CFLAGS = -Wall -g -std=c99 -D _POSIX_C_SOURCE=200809L -Werror
-LFLAGS = -L$(HOME)/cmpt433/public/asound_lib_bbg
+LFLAGS = -L$(HOME)/cmpt433/public/asound_lib_BBB
 LIBS = -lpthread -lasound
 
 SRCS = main.c network.c control.c audio.c downloader.c
