@@ -226,7 +226,12 @@ function handleSongQueueData(data) {
 	}
 
 	// Call refresh when all songs have been added
-	deferRefreshSongTableHtml(numValidVids);
+	if (numValidVids == 0) {
+		refreshSongTableHtml();
+	}
+	else {
+		deferRefreshSongTableHtml(numValidVids);
+	}
 }
 
 
@@ -245,7 +250,7 @@ function sendPlayPause() {
 	setPlayPauseDisplay(!isPlaying);
 }
 
-
+// true or 1 for playing
 function setPlayPauseDisplay(isPlayingInput) {
 	isPlaying = isPlayingInput;
 	
@@ -374,11 +379,7 @@ function handleServerCommand(command) {
 
 	switch (primaryCommand) {
 		case "play":
-			setPlayPauseDisplay(true);
-			break;
-
-		case "pause":
-			setPlayPauseDisplay(false);
+			setPlayPauseDisplay(subCommand);
 			break;
 
 		case "vol":
@@ -389,6 +390,10 @@ function handleServerCommand(command) {
 			setSongProgress(subCommand);
 
 		case "queue":
+			handleSongQueueData(subCommand);
+			break;
+
+		case "queuemore":
 			handleSongQueueData(subCommand);
 			break;
 
