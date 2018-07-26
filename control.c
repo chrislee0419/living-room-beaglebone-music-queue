@@ -12,7 +12,7 @@
 #include <pthread.h>
 #include <errno.h>
 
-#define PRINTF_MODULE           "[control  ] "
+#define PRINTF_MODULE           "[control ] "
 
 #define DATA_OFFSET_INTO_WAVE   44
 #define SAMPLE_SIZE             (sizeof(short))
@@ -113,6 +113,7 @@ static void debugPrintSongList(void)
 static void deleteAndFreeSong(song_t* song) {
         if (song->status == CONTROL_SONG_STATUS_LOADED) {
                 // TODO: delete wav file on disk
+                // only delete if the song does not appear again in the queue
         }
 
         free(song);
@@ -242,7 +243,9 @@ static void *audioLoop(void *arg)
         short *buf;
 
         // prepare thread to be locked when first initialized (not playing)
-        pthread_mutex_lock(&mtx_play);
+        // only applies to master, slave should always play
+        if (mode == CONTROL_MODE_MASTER)
+                pthread_mutex_lock(&mtx_play);
 
         while (loop) {
                 // sleep thread if not in playing status
@@ -557,10 +560,6 @@ int control_getRepeatStatus(void)
 
 void control_addSong(char *url)
 {
-        // TODO
-        printf(PRINTF_MODULE "Notice: control_addSong() got %s\n", url);
-        (void)fflush(stdout);
-
         song_t* new_song = malloc(sizeof(song_t));
 
         strcpy(new_song->filepath, "");
@@ -570,10 +569,10 @@ void control_addSong(char *url)
         new_song->status = CONTROL_SONG_STATUS_QUEUED;
 
         // Add to end of list
+        pthread_mutex_lock(&mtx_queue);
         if (!song_queue) {
                 song_queue = new_song;
-        }
-        else {
+        } else {
                 song_t *current_song = song_queue;
                 while (current_song->next != NULL) {
                         current_song = current_song->next;
@@ -584,6 +583,8 @@ void control_addSong(char *url)
 
         // Download songs if needed
         updateDownloadedSongs();
+        pthread_mutex_unlock(&mtx_queue);
+
         debugPrintSongList();
 }
 
@@ -594,11 +595,11 @@ void control_removeSong(char *url)
         (void)fflush(stdout);
 
         // Find song in list
-
-
+        // use pthread_mutex_lock(&mtx_queue) when modifying song_curr or song_queue
 
         // Delete file from disk
 
+        // free() song object only after we have confirmed it is not in the downloader's queue
 
         // Download new songs if needed
         updateDownloadedSongs();
