@@ -1,8 +1,10 @@
 #ifndef _AUDIO_H_
 #define _AUDIO_H_
 
-#include <stdio.h>
 #include "mp3towav.h"
+
+#define AUDIO_VOLUME_MIN        0
+#define AUDIO_VOLUME_MAX        100
 
 /**
  * Initializes this module
@@ -16,19 +18,28 @@ int audio_init(void);
 void audio_cleanup(void);
 
 /**
- * Set the song to be played
- * @param fn Filename of the song (must be NULL-terminated correctly)
+ * Queue audio data to be played
+ * @param buf Buffer containing audio data
+ * @param size Size of buffer
+ * @return Number of indices played; <0, error
  */
-void audio_setSong(char *fn);
+unsigned int audio_playAudio(short *buf, unsigned int size);
 
 /**
- * Resume playing the current song
+ * Flushes audio data buffer
  */
-void audio_resume(void);
+void audio_stopAudio(void);
 
 /**
- * Pause the song
+ * Set the volume for audio playback
+ * @param vol Volume level from 0 to 100
  */
-void audio_pause(void);
+void audio_setVolume(unsigned int vol);
+
+/**
+ * Get the current volume level of the device
+ * @return Volume level from 0 to 100
+ */
+unsigned int audio_getVolume(void);
 
 #endif

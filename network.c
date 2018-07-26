@@ -1,16 +1,19 @@
+#include "network.h"
+
+#include "control.h"
+#include "audio.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <time.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <errno.h>
 
-#include "network.h"
-#include "control.h"
+#define PRINTF_MODULE           "[network ] "
 
 #define INBOUND_PORT            12345
 #define OUTBOUND_PORT           23456
@@ -45,8 +48,8 @@ struct out_msg {
 };
 
 static struct out_msg *out_queue = NULL;
-static pthread_mutex_t queue_mtx = PTHREAD_MUTEX_INITIALIZER;
-static sem_t queue_sem;
+static pthread_mutex_t mtx_queue = PTHREAD_MUTEX_INITIALIZER;
+static sem_t sem_queue;
 
 /**
  * Helper functions
@@ -57,7 +60,7 @@ static int getSocketFD(unsigned short port, int *fd)
 
         *fd = socket(PF_INET, SOCK_DGRAM, 0);
         if (*fd < 0) {
-                printf("Error (network.c): unable to get file descriptor from socket()\n");
+                printf(PRINTF_MODULE "Error: unable to get file descriptor from socket()\n");
                 (void)fflush(stdout);
                 return errno;
         }
@@ -68,7 +71,7 @@ static int getSocketFD(unsigned short port, int *fd)
         sa.sin_addr.s_addr = htonl(INADDR_ANY);
 
         if (bind(*fd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
-                printf("Error (network.c): unable to bind to port\n");
+                printf(PRINTF_MODULE "Error: unable to bind to port\n");
                 (void)fflush(stdout);
                 return errno;
         }
@@ -80,15 +83,24 @@ static void queueOutboundMessage(char *buf, unsigned int buf_size, struct sockad
 {
         struct out_msg *msg, *elem;
 
+        if (buf_size > BUFFER_SIZE) {
+                printf(PRINTF_MODULE "Warning: outbound message is larger than maximum buffer size, not sending\n");
+                (void)fflush(stdout);
+                return;
+        }
+
         msg = malloc(sizeof(struct out_msg));
-        if (!msg)
-                goto out;
+        if (!msg) {
+                printf(PRINTF_MODULE "Warning: unable to allocate memory for outbound message\n");
+                (void)fflush(stdout);
+                return;
+        }
 
         (void)memset(msg, 0, sizeof(struct out_msg));
         (void)strncpy(msg->buf, buf, buf_size);
         msg->out_addr = sa;
 
-        pthread_mutex_lock(&queue_mtx);
+        pthread_mutex_lock(&mtx_queue);
         {
                 if (out_queue) {
                         elem = out_queue;
@@ -99,17 +111,12 @@ static void queueOutboundMessage(char *buf, unsigned int buf_size, struct sockad
                         out_queue = msg;
                 }
 
-                if (sem_post(&queue_sem) < 0) {
-                        printf("Warning (network.c): semaphore is full, a message may be lost\n");
+                if (sem_post(&sem_queue) < 0) {
+                        printf(PRINTF_MODULE "Warning: semaphore is full, a message may be lost\n");
                         (void)fflush(stdout);
                 }
         }
-        pthread_mutex_unlock(&queue_mtx);
-
-        return;
-out:
-        printf("Warning (network.c): unable to allocate memory for outbound message\n");
-        (void)fflush(stdout);
+        pthread_mutex_unlock(&mtx_queue);
 }
 
 static int queueSystemStatusMessage(struct sockaddr_in sa)
@@ -122,7 +129,12 @@ static int queueSystemStatusMessage(struct sockaddr_in sa)
         c = buf;
         s = control_getQueue();
 
-        bytes = sprintf(c, "vol=%d\n", control_getVolume());
+        bytes = sprintf(c, "vol=%d\n", audio_getVolume());
+        if (!bytes)
+                goto out;
+        c += bytes;
+
+        bytes = sprintf(c, "play=%d\n", control_getPlayStatus());
         if (!bytes)
                 goto out;
         c += bytes;
@@ -160,7 +172,7 @@ static int queueSystemStatusMessage(struct sockaddr_in sa)
 
         return 0;
 out:
-        printf("Warning (network.c): failed to build system status string\n");
+        printf(PRINTF_MODULE "Warning: failed to build system status string\n");
         (void)fflush(stdout);
         return errno;
 }
@@ -171,9 +183,9 @@ static int processCmd(char *buf)
         int num = 0;
 
         if (strstr(buf, CMD_VOLUME_UP)) {
-                control_setVolume(control_getVolume() + VOL_DIFF);
+                audio_setVolume(audio_getVolume() + VOL_DIFF);
         } else if (strstr(buf, CMD_VOLUME_DOWN)) {
-                control_setVolume(control_getVolume() - VOL_DIFF);
+                audio_setVolume(audio_getVolume() - VOL_DIFF);
         } else if (strstr(buf, CMD_PLAY)) {
                 control_playAudio();
         } else if (strstr(buf, CMD_PAUSE)) {
@@ -188,7 +200,7 @@ static int processCmd(char *buf)
                 control_setRepeatStatus(num);
         } else if (strstr(buf, CMD_CHANGE_MODE)) {
                 if (strstr(buf, "master")) {
-                        control_setMasterMode();
+                        control_setMode(CONTROL_MODE_MASTER);
                 } else if (strstr(buf, "slave,")) {
                         struct sockaddr_in sa;
                         unsigned short port;
@@ -214,15 +226,18 @@ static int processCmd(char *buf)
                         sa.sin_port = htons(port);
                         sa.sin_addr.s_addr = inet_addr(buf);
                         if (sa.sin_addr.s_addr < 0) {
-                                printf("Warning (network.c): invalid address provided for master device\n");
+                                printf(PRINTF_MODULE "Warning: invalid address provided for master device\n");
                                 (void)fflush(stdout);
                                 return EADDRNOTAVAIL;
                         }
 
-                        control_setSlaveMode(sa);
+                        control_setMode(CONTROL_MODE_SLAVE);
+
+                        // send connect request to master
+                        queueOutboundMessage("connect\n", strlen("connect\n")+1, sa);
                 }
         } else {
-                printf("Warning (network.c): invalid command received (\"%s\")\n", buf);
+                printf(PRINTF_MODULE "Warning: invalid command received (\"%s\")\n", buf);
                 (void)fflush(stdout);
                 return EINVAL;
         }
@@ -243,8 +258,11 @@ static void processMessage(char *buf, struct sockaddr_in sa)
 
                 if (mode == CONTROL_MODE_MASTER) {
                 } else if (mode == CONTROL_MODE_SLAVE) {
-                        queueOutboundMessage("ping", strlen("ping")+1, sa);
+                        queueOutboundMessage("ping\n", strlen("ping\n")+1, sa);
                 }
+        } else if (strstr(buf, "connect\n")) {
+                // connection request from new slave device
+                control_addSlave(sa);
         } else if (strstr(buf, "audio\n")) {
                 // audio data from master device
         } else if (strstr(buf, "cmd\n")) {
@@ -254,7 +272,7 @@ static void processMessage(char *buf, struct sockaddr_in sa)
                 cmd = buf + CMD_OFFSET;
                 c = cmd;
 
-                printf("Notice (network.c): command received:\n\"%s\"\n", cmd);
+                printf(PRINTF_MODULE "Notice: command received:\n\"%s\"\n", cmd);
                 (void)fflush(stdout);
 
                 while (*c != '\0' && (c-buf) < BUFFER_SIZE) {
@@ -276,7 +294,7 @@ static void processMessage(char *buf, struct sockaddr_in sa)
                         (void)queueSystemStatusMessage(sa);
                 }
         } else {
-                printf("Warning (network.c): invalid message received\n");
+                printf(PRINTF_MODULE "Warning: invalid message received\n");
                 (void)fflush(stdout);
                 queueOutboundMessage("error=\"invalid message\"\n",
                         strlen("error=\"invalid message\"\n") + 1, sa);
@@ -302,7 +320,7 @@ static void *receiverLoop(void *arg)
                         (struct sockaddr *)&sa, &sa_len);
 
                 if (bytes_recv < 0) {
-                        printf("Error (network.c): recvfrom encountered an error\n");
+                        printf(PRINTF_MODULE "Error: recvfrom encountered an error\n");
                         (void)fflush(stdout);
                         return NULL;
                 }
@@ -323,18 +341,18 @@ static void *senderLoop(void *arg)
                 return NULL;
 
         while (loop) {
-                if (sem_wait(&queue_sem) < 0)
+                if (sem_wait(&sem_queue) < 0)
                         continue;
                 if (!out_queue)
                         continue;
 
-                pthread_mutex_lock(&queue_mtx);
+                pthread_mutex_lock(&mtx_queue);
                 {
                         msg = out_queue;
 
                         if (sendto(fd, msg->buf, strlen(msg->buf), 0,
                             (struct sockaddr *)&(msg->out_addr), sizeof(msg->out_addr)) < 0) {
-                                printf("Warning (network.c): sendto failed (%s)\n", strerror(errno));
+                                printf(PRINTF_MODULE "Warning: sendto failed (%s)\n", strerror(errno));
                                 (void)fflush(stdout);
                         }
 
@@ -342,7 +360,7 @@ static void *senderLoop(void *arg)
                         free(msg);
                         msg = NULL;
                 }
-                pthread_mutex_unlock(&queue_mtx);
+                pthread_mutex_unlock(&mtx_queue);
         }
         return NULL;
 }
@@ -356,12 +374,12 @@ int network_init(void)
 
         loop = 1;
 
-        (void)sem_init(&queue_sem, 0, 0);
+        (void)sem_init(&sem_queue, 0, 0);
 
         if ((err = pthread_create(&th_rx, NULL, receiverLoop, NULL)))
-                printf("Error (network.c): unable to create thread for incoming UDP connections\n");
+                printf(PRINTF_MODULE "Error: unable to create thread for incoming UDP connections\n");
         else if ((err = pthread_create(&th_tx, NULL, senderLoop, NULL)))
-                printf("Error (network.c): unable to create thread for outgoing UDP connections\n");
+                printf(PRINTF_MODULE "Error: unable to create thread for outgoing UDP connections\n");
 
         return err;
 }
@@ -376,7 +394,7 @@ void network_cleanup(void)
         // NOTE: Linux-specific
         (void)sprintf(buf, "echo \"a\" > /dev/udp/localhost/%d", INBOUND_PORT);
         if (system(buf)) {
-                printf("Error (network.c): unable to send blank message to close app, close manually?\n");
+                printf(PRINTF_MODULE "Error: unable to send blank message to close app, close manually?\n");
                 (void)fflush(stdout);
         }
 
@@ -384,32 +402,32 @@ void network_cleanup(void)
         (void)pthread_join(th_tx, NULL);
 }
 
-void network_sendPlayCmd(void)
+void network_sendPlayCmd(struct sockaddr_in addr)
 {
-        // TODO
-        printf("Notice (network.c): network_sendPlayCmd() called\n");
-        (void)fflush(stdout);
+        queueOutboundMessage("cmd\n" CMD_PLAY "\n", strlen("cmd\n" CMD_PLAY "\n")+1, addr);
 }
 
-void network_sendPauseCmd(void)
+void network_sendPauseCmd(struct sockaddr_in addr)
 {
-        // TODO
-        printf("Notice (network.c): network_sendPauseCmd() called\n");
-        (void)fflush(stdout);
+        queueOutboundMessage("cmd\n" CMD_PAUSE "\n", strlen("cmd\n" CMD_PAUSE "\n")+1, addr);
 }
 
-void network_sendSkipCmd(void)
+void network_sendSkipCmd(struct sockaddr_in addr)
 {
-        // TODO
-        printf("Notice (network.c): network_sendSkipCmd() called\n");
-        (void)fflush(stdout);
+        queueOutboundMessage("cmd\n" CMD_SKIP "\n", strlen("cmd\n" CMD_SKIP "\n")+1, addr);
 }
 
-void network_sendAudio(char *buf, int len)
+void network_sendData(char *buf, unsigned int len, struct sockaddr_in addr)
 {
-        // TODO
-        printf("Notice (network.c): network_sendAudio() called\n");
-        (void)fflush(stdout);
-        (void)buf;
-        (void)len;
+        if (len > NETWORK_MAX_BUFFER_SIZE) {
+                printf(PRINTF_MODULE "Warning: network_sendData() has been given an oversized buffer, clamping\n");
+                (void)fflush(stdout);
+                len = NETWORK_MAX_BUFFER_SIZE;
+        }
+        queueOutboundMessage(buf, len, addr);
+}
+
+void network_sendPing(struct sockaddr_in addr)
+{
+        queueOutboundMessage("ping\n", strlen("ping\n")+1, addr);
 }

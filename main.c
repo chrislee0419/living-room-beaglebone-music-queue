@@ -1,12 +1,16 @@
-#include <pthread.h>
-#include <stdio.h>
+#include "main.h"
 
 #include "control.h"
 #include "network.h"
 
-#include "main.h"
+#include <pthread.h>
+#include <stdio.h>
 
 static pthread_mutex_t mainMutex = PTHREAD_MUTEX_INITIALIZER;
+
+/*
+ * Helper methods
+ */
 
 static int initializeModules()
 {
@@ -50,6 +54,10 @@ int main()
 	return 0;
 }
 
-void triggerShutdown() {
+/*
+ * Public methods
+ */
+
+void main_triggerShutdown() {
 	pthread_mutex_unlock(&mainMutex);
 }

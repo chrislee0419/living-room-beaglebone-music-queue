@@ -12,19 +12,18 @@ enum control_mode {
         CONTROL_MODE_SLAVE
 };
 
-enum song_status {
-        SONG_STATUS_QUEUED,
-        SONG_STATUS_LOADING,
-        SONG_STATUS_LOADED,
-        SONG_STATUS_REMOVED		// When song is removed while downloading
+enum control_song_status {
+        CONTROL_SONG_STATUS_QUEUED,
+        CONTROL_SONG_STATUS_LOADING,
+        CONTROL_SONG_STATUS_LOADED,
+        CONTROL_SONG_STATUS_REMOVED             // When song is removed while downloading
 };
 
 typedef struct song {
-        char filepath[CONTROL_MAXLEN_FN];	// filepath to wav data
-        char vid[CONTROL_MAXLEN_URL];	// YouTube video ID
-        enum song_status status;
-
-        struct song *next;				// Next song in the queue
+        char filepath[CONTROL_MAXLEN_FN];       // filepath to wav data
+        char vid[CONTROL_MAXLEN_URL];           // YouTube video ID
+        enum control_song_status status;
+        struct song *next;                      // Next song in the queue
 } song_t;
 
 /**
@@ -41,13 +40,7 @@ void control_cleanup(void);
 /**
  * Set the music player to be in master mode
  */
-void control_setMasterMode(void);
-
-/**
- * Set the music player to be in slave mode
- * @param sa Address of master device
- */
-void control_setSlaveMode(struct sockaddr_in sa);
+void control_setMode(enum control_mode m);
 
 /**
  * Gets the current mode set for the BBG
@@ -71,6 +64,12 @@ void control_playAudio(void);
  * Pause audio
  */
 void control_pauseAudio(void);
+
+/**
+ * Get whether the device is playing audio
+ * @return Play status
+ */
+int control_getPlayStatus(void);
 
 /**
  * Skip the current song being played
@@ -111,18 +110,6 @@ const song_t *control_getQueue(void);
  * @return Address to the next song_t object (immutable)
  */
 const song_t *control_getNextSong(void);
-
-/**
- * Set the volume for audio playback
- * @param vol Volume level from 0 to 100
- */
-void control_setVolume(unsigned int vol);
-
-/**
- * Get the current volume level of the device
- * @return Volume level from 0 to 100
- */
-unsigned int control_getVolume(void);
 
 /**
  * Register a slave device
