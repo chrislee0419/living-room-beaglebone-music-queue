@@ -21,10 +21,10 @@ $(document).ready(function() {
 	$('#btn-addsong').click(function() { submitSongLink(); });
 
 	$('#btn-playpause').click(	function() { sendPlayPause(); });
-	$('#btn-skipsong').click(	function() { skipSong(); });
+	$('#btn-skipsong').click(	function() { sendSkipSong(); });
 
-	$('#btn-vol-up').click(	 function() { setServerVolume(getDisplayVolume() + 5); });
-	$('#btn-vol-down').click(function() { setServerVolume(getDisplayVolume() - 5); });
+	$('#btn-vol-up').click(	 function() { sendVolumeUp(); });
+	$('#btn-vol-down').click(function() { sendVolumeDown(); });
 
 	// Incoming control messages
 	socket.on('serverReply', function(data) {
@@ -65,54 +65,125 @@ var songQueue = [];
 function submitSongLink() {
 	// Get form input
 	var songUrl = $('#new-song-input').val();
-	var videoId = youtube_parser(songUrl);
 
+	// Clear form input
+	$('#new-song-input').val("");
+
+	var videoId = youtube_parser(songUrl);
 	if (!videoId) {
+		// TODO: Show error invalid link
+		setError("Cannot add invalid YouTube link!")
 		return;
 	}
 
 	// Send to server
 	sendServerCommand(CMD_ADD_SONG + videoId);
 
-	// Clear form input
-	$('#new-song-input').val("");
-
-	addSongLink(videoId);
+	//addSong(videoId, true);
 }
 
 var apiKey = "AIzaSyAZkC1t4CApwcbyk-JOTVxe5QQVHfblw9g";
 
 // Adds a song to end of the list
-function addSongLink(videoId) {
+function addSong(videoId, shouldUpdateDisplay=false) {
 	// Check Youtube link
 	$.get("https://www.googleapis.com/youtube/v3/videos?id=" + videoId + "&key=" + apiKey + "&part=snippet,contentDetails", 
 		function(data) {
 			// Get youtube video title
 			var videoTitle = data.items[0].snippet.title;
+
+			// Parse duration
 			var videoDuration = data.items[0].contentDetails.duration;
 
-			// Add to song list table HTML
-			addSongToTableHtml(videoId, videoTitle, videoDuration);
-	})
+			var songItem = {
+				"id": videoId,
+				"title": videoTitle,
+				"duration": videoDuration,
+			};
+
+			songQueue.push(songItem);
+
+			if (shouldUpdateDisplay) {
+				refreshSongTableHtml();	
+			}
+	});
 }
 
+
 // Finds the input URL in current list, then removes it
-function removeSongLink(videoId) {
+function removeSong(videoId) {
+	console.log("Removing", videoId);
 	// Find the song url
+	for (var i = 0; i < songQueue.length; i++) {
+		var song = songQueue[i];
+		if (song.id == videoId) {
+			// Remove at index
+			songQueue.splice(i, 1);
+			break;
+		}
+	}
 
 	// If it exists, remove it and update the table HTML
 }
 
-function addSongToTableHtml(videoId, videoTitle, duration) {
-	const newRowHtmlString = `<tr>
-		<td></td>
-	    <td><a href="https://www.youtube.com/watch?v=${videoId}">${videoTitle}</a></td>
-	    <td>${duration}</td>
-	    <td></td>
+function emptyQueue(shouldUpdateDisplay=false) {
+	songQueue = [];
+	if (shouldUpdateDisplay) {
+		refreshSongTableHtml();	
+	}
+}
+
+
+function refreshSongTableHtml() {
+	var newTableHtml = `
+<tr>
+	<th></th>
+	<th>TITLE</th>
+	<th>TIME</th> 
+	<th>...</th>
+</tr>
 	`;
 
-	$("#song-list").append(newRowHtmlString);
+	if (songQueue.length == 0) {		
+		const newRowHtmlString = `
+<tr>
+	<td></td>
+    <td>Nothing in queue!</td>
+    <td></td>
+    <td></td>
+</tr>
+		`;
+		newTableHtml = newTableHtml + newRowHtmlString;
+	}
+	else {
+		for (var i = 0; i < songQueue.length; i++) {
+			var song = songQueue[i];
+			
+			// Add class for first song
+			var currentlyPlayingClass = "";
+			var playingIcon = "";
+			if (i == 0) {
+				currentlyPlayingClass = " class=\"song-currently-playing\"";
+				playingIcon = "<i class=\"fas fa-play\"></i>";
+			}
+
+			const newRowHtmlString = `
+<tr${currentlyPlayingClass}>
+	<td>${playingIcon}</td>
+	<td><a href="https://www.youtube.com/watch?v=${song.id}">${song.title}</a></td>
+	<td>${song.duration}</td>
+	<td>
+		<span href="#" onclick="removeSong('${song.id}');"><i class="fas fa-trash"></i></span>
+	</td>
+</tr>
+			`;
+			newTableHtml = newTableHtml + newRowHtmlString;
+		}
+	}
+
+	$("#song-list").html(newTableHtml);
 }
+
 
 // Taken from https://stackoverflow.com/questions/3452546/how-do-i-get-the-youtube-video-id-from-a-url
 function youtube_parser(url){
@@ -122,17 +193,22 @@ function youtube_parser(url){
 }
 
 
-function resetQueue(data) {
+function handleSongQueueData(data) {
+
+	emptyQueue();
+
 	// Queue data is video IDs separated by delimiters
 	var videoIds = data.split(';');
 	for (var videoId in videoIds) {
-		addSongLink(videoId);
+		addSong(videoId);
 	}
+
+	refreshSongTableHtml();
 }
 
 
 //
-// Play/Pause
+// Playback control
 //========================================================================
 
 var isPlaying = false;
@@ -146,16 +222,22 @@ function sendPlayPause() {
 	setPlayPauseDisplay(!isPlaying);
 }
 
+
 function setPlayPauseDisplay(isPlayingInput) {
 	isPlaying = isPlayingInput;
 	
 	// Change play/puase button display
 	if (isPlaying) {
-		$("#btn-playpause").attr("value", "Pause");
+		$("#btn-playpause").attr("class", "fas fa-pause-circle fa-4x playback-button");
 	}
 	else {
-		$("#btn-playpause").attr("value", "Play");
+		$("#btn-playpause").attr("class", "fas fa-play-circle fa-4x playback-button");
 	}
+}
+
+
+function sendSkipSong() {
+	sendServerCommand(CMD_SKIP);
 }
 
 
@@ -163,12 +245,12 @@ function setPlayPauseDisplay(isPlayingInput) {
 // Volume functions
 //========================================================================
 
-function setServerVolume(newVolume) {
-	sendServerCommand("volume " + newVolume); 
+function sendVolumeUp() {
+	sendServerCommand(CMD_VOLUME_UP); 
 }
 
-function getDisplayVolume() {
-	return parseInt($('#volumeId').attr("value"));
+function sendVolumeDown() {
+	sendServerCommand(CMD_VOLUME_DOWN); 
 }
 
 function setDisplayVolume(newVolume) {
@@ -181,7 +263,7 @@ function pollServer() {
 	window.setTimeout(pollServer, POLL_INTERVAL_MS);
 
 	if ((Date.now() - lastUpdateTimeNodejs) > UPDATE_TIMEOUT) {
-		setError("No response from Node.js server. Is it running?")
+		// setError("No response from Node.js server. Is it running?")
 	}
 }
 
@@ -227,7 +309,7 @@ function handleServerCommand(command) {
 			break;
 
 		case "queue":
-			resetQueue(subCommand);
+			handleSongQueueData(subCommand);
 			break;
 
 		default:

@@ -5,6 +5,7 @@
 	<meta charset="UTF-8">
 
 	<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css" integrity="sha384-WskhaSGFgHYWDcbwN70/dfYBj47jz9qbsMId/iRN3ewGhXQFZCSftd1LZCfmhktB" crossorigin="anonymous">
+	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.2.0/css/all.css" integrity="sha384-hWVjflwFxL6sNzntih27bfxkr27PmbbK/iSvJ+a4+0owXq79v+lsFkW54bOGbiDQ" crossorigin="anonymous">
 
 	<link rel='stylesheet' href='/stylesheets/style.css'></link>
 </head>
@@ -19,7 +20,7 @@
 
 <div id='add-new-song'>
 	<input type="text" id="new-song-input" placeholder="YouTube link">
-	<input type="button" id="btn-addsong" value="Add Song"/>
+	<input type="button" id="btn-addsong" class="btn btn-primary" value="Add Song"/>
 </div>
 <br/>
 
@@ -31,27 +32,33 @@
 	    <th>TIME</th> 
 	    <th>...</th>
 	  </tr>
-	  <tr class="song-currently-playing">
-	  	<td>></td>
-	    <td><a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">Rick Astley - Never Gonna Give You Up (Video)</a></td>
-	    <td>3:32</td>
-	    <td></td>
-	  </tr>
+		<tr>
+			<td></td>
+		    <td>Nothing in queue!</td>
+		    <td></td>
+		    <td></td>
+		</tr>
 	</table>
 </div>
 
-<div id='error-box'>
-	<h2>Server Error</h2>
-	<p>Server error detected. Please resolve error before continuing.</p>
-	<div><p id='error-text'>No error yet...</p></div>
+<div id='error-box' class="alert alert-danger">
+	<span id='error-text'>No error yet...</span>
 </div>
 
-<nav id='playback-controls' class="navbar fixed-bottom navbar-dark bg-dark">
-	<input type="button" id="btn-vol-down" value="Volume Down"/>
-	<input type="button" id="btn-vol-up" value="Volume Up"/>
-	<input type="button" id="btn-playpause" value="Play"/>
-	<input type="button" id="btn-skipsong" value="Skip Song"/>
-	<div id="song-progress-time" class="nav">1:13/3:32</div>
+<nav id='playback-controls' class="navbar fixed-bottom playback-navbar">
+	<div class="playback-bar-left">
+		<input type="button" id="btn-vol-down" value="-"/>
+		<i class="fas fa-volume-up fa-lg" style="color: White;"></i>
+		<span id="volume-display">80</span>
+		<input type="button" id="btn-vol-up" value="+"/>
+	</div>
+	<div class="playback-bar-center">
+		<span class="playback-button"><i id="btn-playpause" class="fas fa-play-circle fa-4x" style="color: White;"></i></span>
+		<span class="playback-button"><i id="btn-skipsong" class="fas fa-step-forward fa-lg" style="color: White;"></i></span>
+	</div>
+	<div class="playback-bar-right">
+		<div id="song-progress-time">1:13 / 3:32</div>
+	</div>
 </nav>
 
 </div>

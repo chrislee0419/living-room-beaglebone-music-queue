@@ -1,15 +1,26 @@
+html {
+	background-color: #f9f9f9;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+}
+
 body {
-	width: 800px;
+	width: 1000px;
+	padding: 20px;
 	margin-left: auto;
 	margin-right: auto;
 }
+
 h1, h2 {
 	margin-bottom: 1px;
 	padding-bottom: 1px;
 }
 
 #content {
-	margin-top: 10pt;
+	min-height:100%;
 }
 
 #status-box {
@@ -31,12 +42,28 @@ h1, h2 {
 }
 
 #error-box {
-	border: thin black solid;
-	clear: both;
-	background-color: red;
-	padding-left: 10pt;
-	padding-right: 10pt;
-	min-height: 100pt;
-	margin-top: 20px;
 	display: none;
+}
+
+.song-currently-playing {
+	background-color: #f3f3f3;
+}
+
+.playback-navbar {
+	background-color: #3f51b5;
+	min-height: 90pt;
+}
+
+.playback-bar-center {
+	min-width: 150px;
+}
+
+.playback-button {
+	margin: 10px;
+}
+
+#volume-display,
+#song-progress-time {
+	margin: 10px;
+	color: white;
 }
