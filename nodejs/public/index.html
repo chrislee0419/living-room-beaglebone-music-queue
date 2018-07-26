@@ -15,7 +15,12 @@
 <div id='content' class="container">
 
 <h1>BeagleBone Music Player</h1>
-<div>by Chris Lee, Eoin Coll, and Eric Liu</div>
+<div>by Chris Lee, Eoin Coll, and Eric Liu&nbsp;
+	<button type="button" class="btn" data-toggle="modal" data-target="#exampleModal">
+		<i class="fas fa-cog"></i>
+	</button>
+</div>
+
 <br/>
 
 <div id='add-new-song'>
@@ -49,7 +54,7 @@
 	<div class="playback-bar-left">
 		<input type="button" id="btn-vol-down" value="-"/>
 		<i class="fas fa-volume-up fa-lg" style="color: White;"></i>
-		<span id="volume-display">80</span>
+		<span id="volumeId">80</span>
 		<input type="button" id="btn-vol-up" value="+"/>
 	</div>
 	<div class="playback-bar-center">
@@ -57,11 +62,34 @@
 		<span class="playback-button"><i id="btn-skipsong" class="fas fa-step-forward fa-lg" style="color: White;"></i></span>
 	</div>
 	<div class="playback-bar-right">
-		<div id="song-progress-time">1:13 / 3:32</div>
+		<div id="song-progress-time">-:-- / -:--</div>
 	</div>
 </nav>
 
 </div>
+
+
+
+	<!-- Modal -->
+	<div class="modal fade" id="exampleModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+	  <div class="modal-dialog" role="document">
+	    <div class="modal-content">
+	      <div class="modal-header">
+	        <h5 class="modal-title" id="exampleModalLabel">Modal title</h5>
+	        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+	          <span aria-hidden="true">&times;</span>
+	        </button>
+	      </div>
+	      <div class="modal-body">
+	        ...
+	      </div>
+	      <div class="modal-footer">
+	        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+	        <button type="button" class="btn btn-primary">Save changes</button>
+	      </div>
+	    </div>
+	  </div>
+	</div>
 
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>

@@ -92,11 +92,12 @@ function addSong(videoId) {
 
 			// Parse duration
 			var videoDuration = data.items[0].contentDetails.duration;
+			var durationSeconds = parseDuration(videoDuration);
 
 			var songItem = {
 				"id": videoId,
 				"title": videoTitle,
-				"duration": videoDuration,
+				"duration": durationSeconds,
 			};
 
 			songQueue.push(songItem);
@@ -123,25 +124,20 @@ function removeSong(videoId) {
 }
 
 function emptyQueue(shouldUpdateDisplay=false) {
-	console.log("emptyQueue");
 	songQueue = [];
 	if (shouldUpdateDisplay) {
 		refreshSongTableHtml();	
 	}
 }
 
-var deferCounter = 0;
 var deferNum = 0;
 
 function refreshSongTableHtml() {
 	// Sometimes, we don't want to refresh nultiple times
-	deferCounter++;
-	if (deferCounter < deferNum) {
+	deferNum--;
+	if (deferNum > 0) {
 		return;
 	}
-
-	deferCounter = 0;
-	deferNum = 0;
 
 	var newTableHtml = `
 <tr>
@@ -175,11 +171,13 @@ function refreshSongTableHtml() {
 				playingIcon = "<i class=\"fas fa-play\"></i>";
 			}
 
+
+
 			const newRowHtmlString = `
 <tr${currentlyPlayingClass}>
 	<td>${playingIcon}</td>
 	<td><a href="https://www.youtube.com/watch?v=${song.id}">${song.title}</a></td>
-	<td>${song.duration}</td>
+	<td>${parseSecsToString(song.duration)}</td>
 	<td>
 		<span href="#" onclick="removeSong('${song.id}');"><i class="fas fa-trash"></i></span>
 	</td>
@@ -194,8 +192,6 @@ function refreshSongTableHtml() {
 
 // Calls deferRefreshSongTableHtml only when counter reaches num
 function deferRefreshSongTableHtml(num) {
-	console.log("deferRefreshSongTableHtml")
-	deferCounter = 0;
 	deferNum = num;
 }
 
@@ -221,7 +217,7 @@ function handleSongQueueData(data) {
 	var videoId;
 	var videoIds = data.split(',');
 	var numValidVids = 0;
-	console.log("handleSongQueueData videoIds", videoIds);
+
 	for (videoId of videoIds) {
 		if (videoId.length > 2) {
 			addSong(videoId);
@@ -255,10 +251,10 @@ function setPlayPauseDisplay(isPlayingInput) {
 	
 	// Change play/puase button display
 	if (isPlaying) {
-		$("#btn-playpause").attr("class", "fas fa-pause-circle fa-4x playback-button");
+		$("#btn-playpause").attr("class", "fas fa-pause-circle fa-4x");
 	}
 	else {
-		$("#btn-playpause").attr("class", "fas fa-play-circle fa-4x playback-button");
+		$("#btn-playpause").attr("class", "fas fa-play-circle fa-4x");
 	}
 }
 
@@ -292,6 +288,60 @@ function pollServer() {
 	if ((Date.now() - lastUpdateTimeNodejs) > UPDATE_TIMEOUT) {
 		// setError("No response from Node.js server. Is it running?")
 	}
+}
+
+//
+// Song time progress
+//========================================================================
+
+const defaultTimeDisplay = "-:-- / -:--";
+const minutes_re = /(\d+)M/
+const seconds_re = /(\d+)S/
+
+// Parses the duration string from Youtube API
+function parseDuration(durationStr) {
+	var minutes = durationStr.match(minutes_re);
+	var seconds = durationStr.match(seconds_re);
+
+	var totalSeconds = 0;
+	if (minutes && minutes[1]) {
+		totalSeconds += parseInt(minutes[1]) * 60;
+	}
+	if (seconds && seconds[1]) {
+		totalSeconds += parseInt(seconds[1]);
+	}
+
+	return totalSeconds;
+}
+
+function parseSecsToString(totalSeconds) {
+	var mins = String(Math.floor(totalSeconds / 60));
+	var secs = String(totalSeconds % 60);
+
+	var str;
+	if (secs.length == 1) {
+		str = `${mins}:0${secs}`;
+	}
+	else {
+		str = `${mins}:${secs}`;
+	}
+
+	return str;
+}
+
+// Updates the time display for currently playing song
+// Input is a fraction 0 - 1
+function setSongProgress(progressAmount) {
+	if (!songQueue[0]) {
+		$('#volumeId').attr("value", defaultTimeDisplay);
+		return;
+	}
+
+	var totalTime = parseSecsToString(songQueue[0].duration); 
+	var currentTime = parseSecsToString(parseInt(songQueue[0].duration * parseFloat(progressAmount))); 
+
+	var timeDisplayStr = `${currentTime} / ${totalTime}`;
+	$('#song-progress-time').html(timeDisplayStr);	
 }
 
 
@@ -334,6 +384,9 @@ function handleServerCommand(command) {
 		case "vol":
 			setDisplayVolume(subCommand);
 			break;
+
+		case "progress":
+			setSongProgress(subCommand);
 
 		case "queue":
 			handleSongQueueData(subCommand);
