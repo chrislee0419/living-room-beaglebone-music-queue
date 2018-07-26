@@ -120,8 +120,8 @@ static void* downloadThread()
 	// Keep downloading as long as there are songs in the queue
 	song_t* song = dequeueSong();
 	while (song) {
-		if (strcmp(song->filepath, "") == 0) {
-                        printf(PRINTF_MODULE "Warning: Song has an empty file path, skipping\n");
+		if (strcmp(song->filepath, "") != 0) {
+                        printf(PRINTF_MODULE "Warning: Song does not have an empty file path, skipping\n");
                         song = dequeueSong();
                         continue;
                 }
