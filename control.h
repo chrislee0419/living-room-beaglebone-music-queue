@@ -6,6 +6,8 @@
 #define CONTROL_MAXLEN_FN       256
 #define CONTROL_MAXLEN_URL      128
 
+#define CONTROL_RMSONG_FIRST    -1
+
 enum control_mode {
         CONTROL_MODE_UNKNOWN = -1,
         CONTROL_MODE_MASTER,
@@ -84,7 +86,7 @@ void control_setRepeatStatus(int repeat);
 
 /**
  * Gets the status of whether the song is repeated
- * @return 0 if not repeating, 1 if repeating
+ * @return 0, if not repeating; 1, if repeating
  */
 int control_getRepeatStatus(void);
 
@@ -97,8 +99,10 @@ void control_addSong(char *url);
 /**
  * Remove a song from the queue
  * @param url YouTube URL of song in queue
+ * @param index Index of song in queue
+ * @return 0, if successful; otherwise, error
  */
-void control_removeSong(char *url);
+int control_removeSong(char *url, int index);
 
 /**
  * Set the status of a song. Should be used for thread safety.

@@ -30,10 +30,12 @@
 #define CMD_PAUSE                       "pause"
 #define CMD_SKIP                        "skip"
 #define CMD_ADD_SONG                    "addsong=%s"
-#define CMD_REMOVE_SONG                 "rmsong=%s"
+#define CMD_ADD_SONG_SSCANF_MATCHES     1
+#define CMD_REMOVE_SONG                 "rmsong=%s,%d"
+#define CMD_REMOVE_SONG_SSCANF_MATCHES  2
 #define CMD_REPEAT_SONG                 "repeat=%d"
+#define CMD_REPEAT_SONG_SSCANF_MATCHES  1
 #define CMD_CHANGE_MODE                 "mode="
-#define CMD_SSCANF_MATCHES              1
 
 #define VOL_DIFF                5
 
@@ -199,11 +201,11 @@ static int processCmd(char *buf)
                 control_pauseAudio();
         } else if (strstr(buf, CMD_SKIP)) {
                 control_skipSong();
-        } else if (sscanf(buf, CMD_ADD_SONG, url) == CMD_SSCANF_MATCHES) {
+        } else if (sscanf(buf, CMD_ADD_SONG, url) == CMD_ADD_SONG_SSCANF_MATCHES) {
                 control_addSong(url);
-        } else if (sscanf(buf, CMD_REMOVE_SONG, url) == CMD_SSCANF_MATCHES) {
-                control_removeSong(url);
-        } else if (sscanf(buf, CMD_REPEAT_SONG, &num) == CMD_SSCANF_MATCHES) {
+        } else if (sscanf(buf, CMD_REMOVE_SONG, url, &num) == CMD_REMOVE_SONG_SSCANF_MATCHES) {
+                control_removeSong(url, num);
+        } else if (sscanf(buf, CMD_REPEAT_SONG, &num) == CMD_REPEAT_SONG_SSCANF_MATCHES) {
                 control_setRepeatStatus(num);
         } else if (strstr(buf, CMD_CHANGE_MODE)) {
                 if (strstr(buf, "master")) {

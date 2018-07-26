@@ -79,7 +79,7 @@ static void updateDownloadedSongs(void)
                 else if (current_song->status == CONTROL_SONG_STATUS_REMOVED) {
                         // Tried to remove song while downloading
                         // Remove it here now
-                        control_removeSong(current_song->vid);
+                        control_removeSong(current_song->vid, CONTROL_RMSONG_FIRST);
                 }
 
                 current_song = current_song->next;
@@ -591,10 +591,10 @@ void control_addSong(char *url)
         debugPrintSongList();
 }
 
-void control_removeSong(char *url)
+int control_removeSong(char *url, int index)
 {
         // TODO
-        printf(PRINTF_MODULE "Notice: control_removeSong() got %s\n", url);
+        printf(PRINTF_MODULE "Notice: control_removeSong() got %s, %d\n", url, index);
         (void)fflush(stdout);
 
         // Find song in list
@@ -606,6 +606,8 @@ void control_removeSong(char *url)
 
         // Download new songs if needed
         updateDownloadedSongs();
+
+        return 0;
 }
 
 enum control_song_status control_setSongStatus(song_t *song, enum control_song_status status)
