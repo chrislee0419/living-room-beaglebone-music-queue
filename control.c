@@ -641,6 +641,12 @@ enum control_song_status control_setSongStatus(song_t *song, enum control_song_s
         return status;
 }
 
+void control_getSongProgress(int *curr, int *end)
+{
+        *curr = au_buf_start;
+        *end = au_buf_end;
+}
+
 const song_t *control_getQueue(void)
 {
         return song_queue;

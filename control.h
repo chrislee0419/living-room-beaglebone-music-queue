@@ -4,7 +4,7 @@
 #include <netinet/in.h>
 
 #define CONTROL_MAXLEN_FN       256
-#define CONTROL_MAXLEN_URL      128
+#define CONTROL_MAXLEN_VID      16
 
 #define CONTROL_RMSONG_FIRST    -1
 
@@ -24,7 +24,7 @@ enum control_song_status {
 
 typedef struct song {
         char filepath[CONTROL_MAXLEN_FN];       // filepath to wav data
-        char vid[CONTROL_MAXLEN_URL];           // YouTube video ID
+        char vid[CONTROL_MAXLEN_VID];           // YouTube video ID
         enum control_song_status status;
         struct song *next;                      // Next song in the queue
 } song_t;
@@ -112,6 +112,13 @@ int control_removeSong(char *url, int index);
  * @return Current status of the song; CONTROL_SONG_STATUS_UNKNOWN, if error
  */
 enum control_song_status control_setSongStatus(song_t *song, enum control_song_status status);
+
+/**
+ * Get the playback progress of the current song
+ * @param curr Address to store current position of playback
+ * @param end Address to store total indices of song
+ */
+void control_getSongProgress(int *curr, int *end);
 
 /**
  * Get the song queue. First item is the current song

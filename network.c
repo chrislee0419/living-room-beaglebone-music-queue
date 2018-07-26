@@ -21,8 +21,9 @@
 
 #define CMD_OFFSET              4
 #define CMD_SLAVE_OFFSET        11
-// roughly the size of "vol=%d\nrepeat=%d\nqueue=" string and 12 commas
-#define QUEUE_OFFSET            40
+// assuming a youtube video id's minimum length is 10, this is roughly the size
+// of a fully built status response string (minus the queue) with 145 commas
+#define QUEUE_OFFSET            215
 
 #define CMD_VOLUME_UP                   "volup"
 #define CMD_VOLUME_DOWN                 "voldown"
@@ -148,10 +149,21 @@ static int queueSystemStatusMessage(struct sockaddr_in sa)
         c += bytes;
 
         song_status = s ? s->status : CONTROL_SONG_STATUS_UNKNOWN;
-        bytes = sprintf(c, "song_status=%d\n", song_status);
+        bytes = sprintf(c, "status=%d\n", song_status);
         if (!bytes)
                 goto out;
         c += bytes;
+
+        if (s) {
+                int play_curr;
+                int play_end;
+
+                control_getSongProgress(&play_curr, &play_end);
+                bytes = sprintf(c, "progress=%d/%d\n", play_curr, play_end);
+                if (!bytes)
+                        goto out;
+                c += bytes;
+        }
 
         bytes = sprintf(c, "queue=");
         if (!bytes)
@@ -159,12 +171,12 @@ static int queueSystemStatusMessage(struct sockaddr_in sa)
         c += bytes;
 
         while (s) {
-                if ((c-buf) >= BUFFER_SIZE - CONTROL_MAXLEN_URL - QUEUE_OFFSET) {
+                if ((c-buf) >= BUFFER_SIZE - CONTROL_MAXLEN_VID - QUEUE_OFFSET) {
                         queueOutboundMessage(buf, (c-buf), sa);
                         (void)memset(buf, 0, BUFFER_SIZE);
                         c = buf;
 
-                        bytes = sprintf(c, "queue=");
+                        bytes = sprintf(c, "queuemore=");
                         if (!bytes)
                                 goto out;
                         c += bytes;
@@ -188,7 +200,7 @@ out:
 
 static int processCmd(char *buf)
 {
-        char url[CONTROL_MAXLEN_URL] = {0};
+        char url[CONTROL_MAXLEN_VID] = {0};
         int num = 0;
 
         if (strstr(buf, CMD_VOLUME_UP)) {
