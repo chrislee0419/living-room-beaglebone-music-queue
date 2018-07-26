@@ -33,6 +33,11 @@ h1, h2 {
 	padding-right: 10pt;
 }
 
+
+#song-queue {
+	margin-bottom: 90px;
+}
+
 #left-box {
 	margin-right: 300px;	
 	border: thin black solid;
@@ -51,7 +56,7 @@ h1, h2 {
 
 .playback-navbar {
 	background-color: #3f51b5;
-	min-height: 90pt;
+	min-height: 90px;
 }
 
 .playback-bar-center {
@@ -60,9 +65,10 @@ h1, h2 {
 
 .playback-button {
 	margin: 10px;
+	cursor: pointer;
 }
 
-#volume-display,
+#volumeId,
 #song-progress-time {
 	margin: 10px;
 	color: white;

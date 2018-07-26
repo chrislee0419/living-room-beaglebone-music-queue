@@ -15,7 +15,12 @@
 <div id='content' class="container">
 
 <h1>BeagleBone Music Player</h1>
-<div>by Chris Lee, Eoin Coll, and Eric Liu</div>
+<div>by Chris Lee, Eoin Coll, and Eric Liu&nbsp;
+	<button type="button" class="btn" data-toggle="modal" data-target="#exampleModal">
+		<i class="fas fa-cog"></i>
+	</button>
+</div>
+
 <br/>
 
 <div id='add-new-song'>
@@ -48,8 +53,9 @@
 <nav id='playback-controls' class="navbar fixed-bottom playback-navbar">
 	<div class="playback-bar-left">
 		<input type="button" id="btn-vol-down" value="-"/>
+		&nbsp;
 		<i class="fas fa-volume-up fa-lg" style="color: White;"></i>
-		<span id="volume-display">80</span>
+		<span id="volumeId">80</span>
 		<input type="button" id="btn-vol-up" value="+"/>
 	</div>
 	<div class="playback-bar-center">
@@ -57,10 +63,68 @@
 		<span class="playback-button"><i id="btn-skipsong" class="fas fa-step-forward fa-lg" style="color: White;"></i></span>
 	</div>
 	<div class="playback-bar-right">
-		<div id="song-progress-time">1:13 / 3:32</div>
+		<div id="song-progress-time">-:-- / -:--</div>
 	</div>
 </nav>
 
+</div>
+
+
+
+<!-- Modal -->
+<div class="modal fade" id="exampleModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="exampleModalLabel">Settings</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+		<form>
+	      <fieldset class="form-group">
+		    <div class="row">
+		      <legend class="col-form-label col-sm-4 pt-0">Device Mode</legend>
+		      <div class="col-sm-8">
+		        <div class="form-check">
+		          <input class="form-check-input" type="radio" name="deviceModeRadios" id="deviceModeMaster" value="master" checked>
+		          <label class="form-check-label" for="deviceModeMaster">
+		            Master device
+		          </label>
+		        </div>
+		        <div class="form-check">
+		          <input class="form-check-input" type="radio" name="deviceModeRadios" id="deviceModeSlave" value="slave">
+		          <label class="form-check-label" for="deviceModeSlave">
+		            Slave device
+		          </label>
+		        </div>
+		      </div>
+		    </div>
+		  </fieldset>
+
+		    <div class="form-group row">
+		    	<label for="inputMasterIp" class="col-sm-4 col-form-label">Connect to IP address</label>
+		    	<div class="col-sm-8">
+		    		<input type="text" class="form-control" id="inputMasterIp" placeholder="IP Address">
+		    	</div>
+		    </div>
+
+		    <div class="form-group row">
+		    	<label for="inputMasterIp" class="col-sm-4 col-form-label">Master IP address</label>
+		    	<div class="col-sm-8">
+		    		<input type="text" class="form-control" id="inputMasterIp" placeholder="IP Address" value="0.0.0.0" readonly>
+		    		<p class="form-text text-muted">Use this IP address to connect slave devices.</p>
+		    	</div>
+		    </div>
+		</form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary">Save changes</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
