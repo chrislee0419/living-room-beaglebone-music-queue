@@ -8,6 +8,10 @@
 
 static pthread_mutex_t mainMutex = PTHREAD_MUTEX_INITIALIZER;
 
+/*
+ * Helper methods
+ */
+
 static int initializeModules()
 {
         int err = 0;
@@ -50,6 +54,10 @@ int main()
 	return 0;
 }
 
-void triggerShutdown() {
+/*
+ * Public methods
+ */
+
+void main_triggerShutdown() {
 	pthread_mutex_unlock(&mainMutex);
 }
