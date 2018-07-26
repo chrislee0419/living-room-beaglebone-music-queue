@@ -92,6 +92,9 @@ static void debugPrintSongList(void)
         while (current_song) {
                 char statusStr[10];
                 switch (current_song->status) {
+                        case CONTROL_SONG_STATUS_UNKNOWN:
+                                strcpy(statusStr, "UNKNOWN");
+                                break;
                         case CONTROL_SONG_STATUS_QUEUED:
                                 strcpy(statusStr, "QUEUED");
                                 break;
