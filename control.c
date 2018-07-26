@@ -33,7 +33,6 @@ static enum control_mode mode = CONTROL_MODE_MASTER;
 static slave_dev_t *slave_dev_list = NULL;
 
 static song_t *song_queue = NULL;
-static song_t *song_curr = NULL;
 
 static short *au_buf = NULL;            // ring buffer when in slave mode, otherwise entire music file
 static int au_buf_start = 0;            // represents current index of audio data
@@ -51,18 +50,16 @@ static pthread_mutex_t mtx_audio = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mtx_queue = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mtx_slist = PTHREAD_MUTEX_INITIALIZER;
 
-static song_t *song_list = NULL;
-
 /*
  * Helper functions
  */
 
 // Checks if any songs need to be downloaded and processed
 // Downloads them in a new background thread
-void updateDownloadedSongs(void)
+static void updateDownloadedSongs(void)
 {
         // Go through first N songs and download them if not already downloaded
-        song_t* current_song = song_list;
+        song_t* current_song = song_queue;
         for (int i = 0; i < NUM_SONGS_TO_DOWNLOAD; i++) {
                 if (!current_song) {
                         break;
@@ -89,9 +86,9 @@ void updateDownloadedSongs(void)
         }
 }
 
-void debugPrintSongList(void)
+static void debugPrintSongList(void)
 {
-        song_t* current_song = song_list;
+        song_t* current_song = song_queue;
         while (current_song) {
                 char statusStr[10];
                 switch (current_song->status) {
@@ -113,6 +110,15 @@ void debugPrintSongList(void)
         }
 }
 
+static void deleteAndFreeSong(song_t* song) {
+        if (song->status == CONTROL_SONG_STATUS_LOADED) {
+                // TODO: delete wav file on disk
+        }
+
+        free(song);
+}
+
+// Called when a song is done playing
 static int loadNewSong(void)
 {
         FILE *file;
@@ -126,17 +132,20 @@ static int loadNewSong(void)
         if (!song_queue)
                 return ENODATA;
 
+        song_t* song_prev = song_queue;
+
+        // Get a new current song at the front of the queue
+        song_queue = song_queue->next;
+        song_t* song_curr = song_queue;
+
+        deleteAndFreeSong(song_prev);
+
         // check if the audio file has been downloaded
-        if (song_queue->status != CONTROL_SONG_STATUS_LOADED) {
+        if (song_curr->status != CONTROL_SONG_STATUS_LOADED) {
                 pthread_mutex_unlock(&mtx_queue);
                 return ENODATA;
         }
 
-        if (song_curr)
-                free(song_curr);
-
-        song_curr = song_queue;
-        song_queue = song_queue->next;
         pthread_mutex_unlock(&mtx_queue);
 
         // Open file
@@ -224,11 +233,6 @@ static void clearSongQueue(void)
                 song_queue = s->next;
                 free(s);
         }
-
-        if (song_curr) {
-                free(song_curr);
-                song_curr = NULL;
-        }
         pthread_mutex_unlock(&mtx_queue);
 }
 
@@ -248,8 +252,7 @@ static void *audioLoop(void *arg)
                 // take new song from the top of the queue if:
                 // - au_buf (audio data from file) is NULL
                 // - end of the current song is reached
-                // - song_curr is NULL
-                if (!au_buf || au_buf_end == au_buf_start || !song_curr) {
+                if (!au_buf || au_buf_end == au_buf_start ) {
                         // busy waiting during slave mode
                         // audio data can come from master at any time
                         if (mode == CONTROL_MODE_SLAVE)
@@ -527,9 +530,7 @@ void control_skipSong(void)
 
                 // free the current song if playing, or the next song in the queue
                 pthread_mutex_lock(&mtx_queue);
-                if (song_curr) {
-                        free(song_curr);
-                } else if (song_queue) {
+                if (song_queue) {
                         song_t *s;
 
                         s = song_queue;
@@ -569,11 +570,11 @@ void control_addSong(char *url)
         new_song->status = CONTROL_SONG_STATUS_QUEUED;
 
         // Add to end of list
-        if (!song_list) {
-                song_list = new_song;
+        if (!song_queue) {
+                song_queue = new_song;
         }
         else {
-                song_t *current_song = song_list;
+                song_t *current_song = song_queue;
                 while (current_song->next != NULL) {
                         current_song = current_song->next;
                 }
@@ -605,10 +606,7 @@ void control_removeSong(char *url)
 
 const song_t *control_getQueue(void)
 {
-        // TODO
-        printf(PRINTF_MODULE "Notice: control_getQueue() called\n");
-        (void)fflush(stdout);
-        return NULL;
+        return song_queue;
 }
 
 const song_t *control_getNextSong(void)
@@ -651,4 +649,9 @@ void control_verifySlaveStatus(struct sockaddr_in addr)
         pthread_mutex_unlock(&mtx_slist);
 
         printf(PRINTF_MODULE "Warning: unable to verify slave status, no slave with the provided address\n");
+}
+
+
+void control_onDownloadComplete(void) {
+        control_playAudio();
 }

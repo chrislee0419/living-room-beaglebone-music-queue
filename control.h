@@ -123,4 +123,9 @@ void control_addSlave(struct sockaddr_in addr);
  */
 void control_verifySlaveStatus(struct sockaddr_in addr);
 
+/**
+ * Callback when a download completes
+ */
+void control_onDownloadComplete(void);
+
 #endif

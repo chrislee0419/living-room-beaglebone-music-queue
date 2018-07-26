@@ -78,14 +78,12 @@ function submitSongLink() {
 
 	// Send to server
 	sendServerCommand(CMD_ADD_SONG + videoId);
-
-	//addSong(videoId, true);
 }
 
 var apiKey = "AIzaSyAZkC1t4CApwcbyk-JOTVxe5QQVHfblw9g";
 
 // Adds a song to end of the list
-function addSong(videoId, shouldUpdateDisplay=false) {
+function addSong(videoId) {
 	// Check Youtube link
 	$.get("https://www.googleapis.com/youtube/v3/videos?id=" + videoId + "&key=" + apiKey + "&part=snippet,contentDetails", 
 		function(data) {
@@ -103,9 +101,7 @@ function addSong(videoId, shouldUpdateDisplay=false) {
 
 			songQueue.push(songItem);
 
-			if (shouldUpdateDisplay) {
-				refreshSongTableHtml();	
-			}
+			refreshSongTableHtml();	
 	});
 }
 
@@ -127,14 +123,26 @@ function removeSong(videoId) {
 }
 
 function emptyQueue(shouldUpdateDisplay=false) {
+	console.log("emptyQueue");
 	songQueue = [];
 	if (shouldUpdateDisplay) {
 		refreshSongTableHtml();	
 	}
 }
 
+var deferCounter = 0;
+var deferNum = 0;
 
 function refreshSongTableHtml() {
+	// Sometimes, we don't want to refresh nultiple times
+	deferCounter++;
+	if (deferCounter < deferNum) {
+		return;
+	}
+
+	deferCounter = 0;
+	deferNum = 0;
+
 	var newTableHtml = `
 <tr>
 	<th></th>
@@ -184,6 +192,12 @@ function refreshSongTableHtml() {
 	$("#song-list").html(newTableHtml);
 }
 
+// Calls deferRefreshSongTableHtml only when counter reaches num
+function deferRefreshSongTableHtml(num) {
+	console.log("deferRefreshSongTableHtml")
+	deferCounter = 0;
+	deferNum = num;
+}
 
 // Taken from https://stackoverflow.com/questions/3452546/how-do-i-get-the-youtube-video-id-from-a-url
 function youtube_parser(url){
@@ -192,18 +206,31 @@ function youtube_parser(url){
     return (match&&match[7].length==11)? match[7] : false;
 }
 
-
+var prevQueueData = "undefined";
 function handleSongQueueData(data) {
+	// Update things only if data is different
+	if (data == prevQueueData) {
+		return;
+	}
+
+	prevQueueData = data;
 
 	emptyQueue();
 
 	// Queue data is video IDs separated by delimiters
-	var videoIds = data.split(';');
-	for (var videoId in videoIds) {
-		addSong(videoId);
+	var videoId;
+	var videoIds = data.split(',');
+	var numValidVids = 0;
+	console.log("handleSongQueueData videoIds", videoIds);
+	for (videoId of videoIds) {
+		if (videoId.length > 2) {
+			addSong(videoId);
+			numValidVids++;
+		}
 	}
 
-	refreshSongTableHtml();
+	// Call refresh when all songs have been added
+	deferRefreshSongTableHtml(numValidVids);
 }
 
 
