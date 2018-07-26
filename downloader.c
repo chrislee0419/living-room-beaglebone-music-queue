@@ -6,6 +6,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
+#define PRINTF_MODULE   "[download] "
 
 #define CMDLINE_MAX_LEN 1024
 static const char* DOWNLOAD_CMDLINE = "youtube-dl --extract-audio --audio-format wav -o '~/cache/%%(id)s.%%(ext)s' https://www.youtube.com/watch?v=%s";
@@ -18,7 +21,7 @@ static int fifoHeadIndex = 0;
 static int fifoTailIndex = 0;	// The next empty slot, at the end of the queue
 static pthread_mutex_t fifoMutex = PTHREAD_MUTEX_INITIALIZER;
 
-static bool isDownloading = false;
+static pthread_mutex_t isDownloadingMutex = PTHREAD_MUTEX_INITIALIZER;
 
 
 /*
@@ -39,6 +42,8 @@ void downloader_init(void)
 	// Clean FIFO queue
 	pthread_mutex_lock(&fifoMutex);
 	memset(songFifoQueue, 0, FIFO_QUEUE_SIZE * sizeof(songFifoQueue));
+        fifoHeadIndex = 0;
+        fifoTailIndex = 0;
 	pthread_mutex_unlock(&fifoMutex);
 
 	// Clear cache
@@ -56,9 +61,15 @@ void downloader_queueDownloadSong(song_t* song)
 	enqueueSong(song);
 
 	// Spawn download thread if it's not running
-	if (!isDownloading) {
+	if (!pthread_mutex_trylock(&isDownloadingMutex)) {
 		pthread_t pDownloadThread;
-		pthread_create(&pDownloadThread, 0, &downloadThread, 0);
+                pthread_attr_t attr;
+
+                // set detached thread state, so join is not necessary for cleanup
+                (void)pthread_attr_init(&attr);
+                (void)pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+		(void)pthread_create(&pDownloadThread, &attr, &downloadThread, 0);
+                (void)pthread_attr_destroy(&attr);
 	}
 }
 
@@ -67,20 +78,29 @@ void downloader_queueDownloadSong(song_t* song)
  * Private functions
  */
 
-static void enqueueSong(song_t* song) {
+static void enqueueSong(song_t* song)
+{
+	pthread_mutex_lock(&fifoMutex);
 	if (songFifoQueue[fifoTailIndex] != NULL) {
-		printf("Error (downloader.c): Download queue full - item not queued\n");
+		printf(PRINTF_MODULE "Warning: Download queue full - item not queued\n");
+	        pthread_mutex_unlock(&fifoMutex);
 		return;
 	}
 
-	pthread_mutex_lock(&fifoMutex);
-	songFifoQueue[fifoTailIndex] = song;
-	pthread_mutex_unlock(&fifoMutex);
+        // Check if the file exists already
+        if (!access(song->filepath, F_OK)) {
+                printf(PRINTF_MODULE "Notice: music file already exists, item not queued\n");
+                pthread_mutex_unlock(&fifoMutex);
+                return;
+        }
 
+	songFifoQueue[fifoTailIndex] = song;
 	fifoTailIndex = (fifoTailIndex + 1) % FIFO_QUEUE_SIZE;
+	pthread_mutex_unlock(&fifoMutex);
 }
 
-static song_t* dequeueSong() {
+static song_t* dequeueSong()
+{
 	if (fifoHeadIndex == fifoTailIndex) {
 		return NULL;
 	}
@@ -88,9 +108,8 @@ static song_t* dequeueSong() {
 	pthread_mutex_lock(&fifoMutex);
 	song_t* output = songFifoQueue[fifoHeadIndex];
 	songFifoQueue[fifoHeadIndex] = NULL;
-	pthread_mutex_unlock(&fifoMutex);
-
 	fifoHeadIndex = (fifoHeadIndex + 1) % FIFO_QUEUE_SIZE;
+	pthread_mutex_unlock(&fifoMutex);
 
 	return output;
 }
@@ -98,14 +117,14 @@ static song_t* dequeueSong() {
 // args is a pointer to song_t
 static void* downloadThread()
 {
-	isDownloading = true;
-
 	// Keep downloading as long as there are songs in the queue
 	song_t* song = dequeueSong();
 	while (song) {
-
-		assert(song);
-		assert(strcmp(song->filepath, "") == 0);
+		if (strcmp(song->filepath, "") == 0) {
+                        printf(PRINTF_MODULE "Warning: Song has an empty file path, skipping\n");
+                        song = dequeueSong();
+                        continue;
+                }
 
 		// Run youtube-dl to download youtube audio as .wav file
 		char cmdline[CMDLINE_MAX_LEN];
@@ -124,7 +143,7 @@ static void* downloadThread()
 		song = dequeueSong();
 	}
 
-	isDownloading = false;
+        pthread_mutex_unlock(&isDownloadingMutex);
 
 	return 0;
 }
