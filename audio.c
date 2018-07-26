@@ -1,11 +1,11 @@
+#include "audio.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <alsa/asoundlib.h>
 #include <alloca.h>
 #include <pthread.h>
 #include <errno.h>
-
-#include "audio.h"
 
 #define PRINTF_MODULE   "[audio   ] "
 

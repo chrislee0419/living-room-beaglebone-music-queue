@@ -1,3 +1,8 @@
+#include "network.h"
+
+#include "control.h"
+#include "audio.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -7,10 +12,6 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <errno.h>
-
-#include "network.h"
-#include "control.h"
-#include "audio.h"
 
 #define PRINTF_MODULE           "[network ] "
 

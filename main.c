@@ -1,10 +1,10 @@
-#include <pthread.h>
-#include <stdio.h>
+#include "main.h"
 
 #include "control.h"
 #include "network.h"
 
-#include "main.h"
+#include <pthread.h>
+#include <stdio.h>
 
 static pthread_mutex_t mainMutex = PTHREAD_MUTEX_INITIALIZER;
 

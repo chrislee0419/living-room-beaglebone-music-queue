@@ -1,11 +1,11 @@
+#include "downloader.h"
+
 #include <assert.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include "downloader.h"
 
 #define CMDLINE_MAX_LEN 1024
 static const char* DOWNLOAD_CMDLINE = "youtube-dl --extract-audio --audio-format wav -o '~/cache/%%(id)s.%%(ext)s' https://www.youtube.com/watch?v=%s";
