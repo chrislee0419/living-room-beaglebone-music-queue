@@ -133,7 +133,7 @@ static void* downloadThread()
 		system(cmdline);
 
 		// Update song with .wav filepath
-		strcat(song->filepath, "cache/");
+		strcat(song->filepath, "/root/cache/");
 		strcat(song->filepath, song->vid);
 		strcat(song->filepath, WAV_EXT);
 
