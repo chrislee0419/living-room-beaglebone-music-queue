@@ -150,7 +150,10 @@ static int loadNewSong(void)
                 deleteAndFreeSong(song_prev);
         }
 
-        if (song_queue->status != CONTROL_SONG_STATUS_LOADED) {
+        if (!song_queue) {
+                pthread_mutex_unlock(&mtx_queue);
+                return ENODATA;
+        } else  if (song_queue->status != CONTROL_SONG_STATUS_LOADED) {
                 // check if the audio file has been downloaded
                 pthread_mutex_unlock(&mtx_queue);
                 return ENODATA;
