@@ -137,18 +137,19 @@ static int loadNewSong(void)
 
         // get new song from queue
         pthread_mutex_lock(&mtx_queue);
-        if (!song_queue)
+        if (!song_queue) {
+                pthread_mutex_unlock(&mtx_queue);
                 return ENODATA;
+        }
 
         if (song_queue->status == CONTROL_SONG_STATUS_PLAYING) {
                 song_t* song_prev = song_queue;
 
                 // Get a new current song at the front of the queue
                 song_queue = song_queue->next;
-                song_curr = song_queue;
-
                 deleteAndFreeSong(song_prev);
         }
+
         if (song_queue->status != CONTROL_SONG_STATUS_LOADED) {
                 // check if the audio file has been downloaded
                 pthread_mutex_unlock(&mtx_queue);
@@ -194,6 +195,8 @@ static int loadNewSong(void)
         }
 
         fclose(file);
+
+        control_setSongStatus(song_curr, CONTROL_SONG_STATUS_PLAYING);        
 
         // copy data to au_buf
         pthread_mutex_lock(&mtx_audio);
@@ -542,20 +545,14 @@ void control_skipSong(void)
                         was_playing = 1;
                 }
 
-                // free the current song if playing, or the next song in the queue
-                pthread_mutex_lock(&mtx_queue);
-                if (song_queue) {
-                        song_t *s;
-
-                        s = song_queue;
-                        song_queue = s->next;
-                        free(s);
+                if (loadNewSong()) {
+                        // if queue is empty/error occurred, pause audio playback
+                        control_pauseAudio();
                 }
-                pthread_mutex_unlock(&mtx_queue);
-
                 // resume audio if it was playing before
-                if (was_playing)
+                else if (was_playing) {
                         control_playAudio();
+                }
         }
 }
 

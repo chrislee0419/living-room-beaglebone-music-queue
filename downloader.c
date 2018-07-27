@@ -121,10 +121,10 @@ static void* downloadThread()
 	song_t* song = dequeueSong();
 	while (song) {
 		if (strcmp(song->filepath, "") != 0) {
-                        printf(PRINTF_MODULE "Warning: Song does not have an empty file path, skipping\n");
-                        song = dequeueSong();
-                        continue;
-                }
+                printf(PRINTF_MODULE "Warning: Song does not have an empty file path, skipping\n");
+                song = dequeueSong();
+                continue;
+        }
 
 		// Run youtube-dl to download youtube audio as .wav file
 		char cmdline[CMDLINE_MAX_LEN];
@@ -138,18 +138,20 @@ static void* downloadThread()
 		strcat(song->filepath, WAV_EXT);
 
 		// Update song status
-                int status = control_setSongStatus(song, CONTROL_SONG_STATUS_LOADED);
+        int status = control_setSongStatus(song, CONTROL_SONG_STATUS_LOADED);
 
-                // Remove song if the status was set to removed
-                if (status == CONTROL_SONG_STATUS_REMOVED) {
-                        // TODO: remove song file if it isn't duplicated in the queue
-                        // should probably call control_removeSong
-                }
+        // Remove song if the status was set to removed
+        if (status == CONTROL_SONG_STATUS_REMOVED) {
+                // TODO: remove song file if it isn't duplicated in the queue
+                // should probably call control_removeSong
+        }
+
+        control_onDownloadComplete();
 
 		song = dequeueSong();
 	}
 
-        pthread_mutex_unlock(&isDownloadingMutex);
+    pthread_mutex_unlock(&isDownloadingMutex);
 
 	return 0;
 }
