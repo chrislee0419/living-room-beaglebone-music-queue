@@ -88,7 +88,7 @@ unsigned int audio_playAudio(short *buf, unsigned int size)
 
         pthread_mutex_unlock(&mtx);
 
-        return size;
+        return frames * NUM_CHANNELS;
 }
 
 void audio_stopAudio(void)
