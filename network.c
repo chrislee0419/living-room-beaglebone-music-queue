@@ -298,7 +298,7 @@ static void processMessage(char *buf, struct sockaddr_in sa)
                 cmd = buf + CMD_OFFSET;
                 c = cmd;
 
-                printf(PRINTF_MODULE "Notice: command received:\n\"%s\"\n", cmd);
+                printf(PRINTF_MODULE "Notice: command received: \"%s\"\n", cmd);
                 (void)fflush(stdout);
 
                 while (*c != '\0' && (c-buf) < BUFFER_SIZE) {
