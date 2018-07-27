@@ -19,7 +19,8 @@ enum control_song_status {
         CONTROL_SONG_STATUS_QUEUED,
         CONTROL_SONG_STATUS_LOADING,
         CONTROL_SONG_STATUS_LOADED,
-        CONTROL_SONG_STATUS_REMOVED             // When song is removed while downloading
+        CONTROL_SONG_STATUS_REMOVED,            // When song is removed while downloading
+        CONTROL_SONG_STATUS_PLAYING
 };
 
 typedef struct song {
