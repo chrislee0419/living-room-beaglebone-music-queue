@@ -1,0 +1,16 @@
+[Unit]
+Description=Node.js application for distributed music player service
+After=syslog.target network.target
+Wants=musicApp.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/musicPlayer/nodejs
+ExecStart=/usr/bin/node /root/musicPlayer/nodejs/server.js
+Restart=on-failure
+StandardOutput=syslog
+SyslogIdentifier=musicWeb
+
+[Install]
+WantedBy=multi-user.target

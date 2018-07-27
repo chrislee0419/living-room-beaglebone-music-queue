@@ -9,7 +9,7 @@ LIBS = -lpthread -lasound
 SRCS = main.c network.c control.c audio.c downloader.c
 #SRCS = $(wildcard *.c)
 
-all: app node
+all: app node scripts
 
 app:
 	$(CC_C) $(CFLAGS) $(SRCS) $(LFLAGS) $(LIBS) -o $(OUTDIR)/$(OUTFILE)
@@ -18,9 +18,13 @@ node:
 	mkdir -p $(OUTDIR)/music-player-nodejs-copy/
 	cp -R nodejs/* $(OUTDIR)/music-player-nodejs-copy/
 
+scripts:
+	mkdir -p $(OUTDIR)/music-player-services
+	cp scripts/install.sh $(OUTDIR)
+	cp scripts/*.service $(OUTDIR)/music-player-services
+
 clean:
 	rm $(OUTDIR)/$(OUTFILE)
 	rm -R $(OUTDIR)/music-player-nodejs-copy/
-
-audio:
-	$(CC_C) $(CFLAGS)  $(LFLAGS) audio.c mp3towav.c -lpthread -lasound -o$(OUTDIR)/audio
+	rm $(OUTDIR)/install.sh
+	rm -R $(OUTDIR)/music-player-services/

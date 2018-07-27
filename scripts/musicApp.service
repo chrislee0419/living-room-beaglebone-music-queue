@@ -1,0 +1,16 @@
+[Unit]
+Description=C application for distributed music player service
+After=syslog.target network.target
+Wants=musicWeb.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/
+ExecStart=/root/musicPlayer/musicPlayer
+Restart=on-failure
+StandardOutput=syslog
+SyslogIdentifier=musicApp
+
+[Install]
+WantedBy=multi-user.target
