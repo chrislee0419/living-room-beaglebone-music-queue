@@ -53,6 +53,7 @@ const CMD_ADD_SONG    = "addsong=";
 const CMD_REMOVE_SONG = "rmsong=";
 const CMD_REPEAT_SONG = "repeat=";
 const CMD_CHANGE_MODE = "mode=";
+const CMD_GET_MODE 	  = "getmode";
 
 function sendServerCommand(data) {
 	socket.emit('clientCommand', 'cmd\n' + data + '\n');
@@ -364,6 +365,25 @@ const DEVICE_MODE_SLAVE = "slave";
 
 var deviceMode = DEVICE_MODE_MASTER;
 
+function getServerMode() {
+	sendServerCommand(CMD_GET_MODE);
+}
+
+function setDeviceMode(newMode) {
+	deviceMode = newMode;
+	if (deviceMode == DEVICE_MODE_MASTER) {
+		$('#radioModeMaster').prop("checked", true);
+		$('#radioModeSlave').prop("checked", false);
+	}
+	else {
+		$('#radioModeMaster').prop("checked", false);
+		$('#radioModeSlave').prop("checked", true);
+	}
+
+	handleModeChange();
+}
+
+// Displays the corresponding IP address (master) or IP input field (slave)
 function handleModeChange() {
 	if($('#radioModeMaster').is(':checked')) {
 		deviceMode = DEVICE_MODE_MASTER;
@@ -425,6 +445,11 @@ function handleServerCommand(command) {
 
 		case "progress":
 			setSongProgress(subCommand);
+			break;
+
+		case "mode":
+			setDeviceMode(subCommand);
+			break;
 
 		case "queue":
 			handleSongQueueData(subCommand);
