@@ -265,7 +265,7 @@ static void *audioLoop(void *arg)
                 // take new song from the top of the queue if:
                 // - au_buf (audio data from file) is NULL
                 // - end of the current song is reached
-                if (!au_buf || au_buf_end == au_buf_start ) {
+                if (!au_buf || au_buf_end <= au_buf_start ) {
                         // busy waiting during slave mode
                         // audio data can come from master at any time
                         if (mode == CONTROL_MODE_SLAVE)
