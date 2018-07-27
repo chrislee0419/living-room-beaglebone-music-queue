@@ -26,6 +26,8 @@ $(document).ready(function() {
 	$('#btn-vol-up').click(	 function() { sendVolumeUp(); });
 	$('#btn-vol-down').click(function() { sendVolumeDown(); });
 
+	$('#btn-savesettings').click(function() { saveSettings(); });
+
 	// Incoming control messages
 	socket.on('serverReply', function(data) {
 		handleServerCommands(data);
@@ -33,6 +35,8 @@ $(document).ready(function() {
 
 	// Poll server for new data
 	pollServer();
+
+	handleModeChange();
 });
 
 
@@ -48,6 +52,7 @@ const CMD_SKIP        = "skip";
 const CMD_ADD_SONG    = "addsong=";
 const CMD_REMOVE_SONG = "rmsong=";
 const CMD_REPEAT_SONG = "repeat=";
+const CMD_CHANGE_MODE = "mode=";
 
 function sendServerCommand(data) {
 	socket.emit('clientCommand', 'cmd\n' + data + '\n');
@@ -349,6 +354,38 @@ function setSongProgress(progressAmount) {
 	$('#song-progress-time').html(timeDisplayStr);	
 }
 
+
+//
+// Master/slave device connection settings
+//========================================================================
+
+const DEVICE_MODE_MASTER = "master";
+const DEVICE_MODE_SLAVE = "slave";
+
+var deviceMode = DEVICE_MODE_MASTER;
+
+function handleModeChange() {
+	if($('#radioModeMaster').is(':checked')) {
+		deviceMode = DEVICE_MODE_MASTER;
+		$('#connectIpFormGroup').hide();
+		$('#showIpFormGroup').show();
+	}
+	else {
+		deviceMode = DEVICE_MODE_SLAVE;
+		$('#connectIpFormGroup').show();
+		$('#showIpFormGroup').hide();
+	}
+}
+
+function saveSettings() {
+	if (deviceMode == DEVICE_MODE_MASTER) {
+		sendServerCommand(CMD_CHANGE_MODE + deviceMode);
+	}
+	else {
+		var addressInput = $('#inputMasterIp').val();
+		sendServerCommand(CMD_CHANGE_MODE + deviceMode + ',' + addressInput);
+	}
+}
 
 //
 // Handling server commands
