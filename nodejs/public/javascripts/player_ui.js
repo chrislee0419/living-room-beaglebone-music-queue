@@ -52,8 +52,7 @@ const CMD_SKIP        = "skip";
 const CMD_ADD_SONG    = "addsong=";
 const CMD_REMOVE_SONG = "rmsong=";
 const CMD_REPEAT_SONG = "repeat=";
-const CMD_CHANGE_MODE = "mode=";
-const CMD_GET_MODE 	  = "getmode";
+const CMD_CHANGE_MODE = "mode";
 
 function sendServerCommand(data) {
 	socket.emit('clientCommand', 'cmd\n' + data + '\n');
@@ -256,7 +255,7 @@ function sendPlayPause() {
 	setPlayPauseDisplay(!isPlaying);
 }
 
-// true or 1 for playing
+// true for playing
 function setPlayPauseDisplay(isPlayingInput) {
 	isPlaying = isPlayingInput;
 	
@@ -288,7 +287,7 @@ function sendVolumeDown() {
 }
 
 function setDisplayVolume(newVolume) {
-	$('#volumeId').attr("value", parseInt(newVolume));
+	$('#volumeId').html(parseInt(newVolume));
 }
 
 
@@ -341,18 +340,29 @@ function parseSecsToString(totalSeconds) {
 }
 
 // Updates the time display for currently playing song
-// Input is a fraction 0 - 1
-function setSongProgress(progressAmount) {
+// Input is a string "123/435" of the fraction representing the progress
+function setSongProgress(progressInput) {
 	if (!songQueue[0]) {
-		$('#volumeId').attr("value", defaultTimeDisplay);
+		$('#song-progress-time').html(defaultTimeDisplay);
 		return;
 	}
 
+	var nums = progressInput.split('/');
+	var progressFraction;
+	if (nums[0] == '0' || nums[1] == '0') {
+		progressFraction = 0;
+	}
+	else {
+		progressFraction = parseFloat(nums[0]) / parseFloat(nums[1]);
+	}	
+
+	console.log(progressInput, nums, progressFraction);
+
 	var totalTime = parseSecsToString(songQueue[0].duration); 
-	var currentTime = parseSecsToString(parseInt(songQueue[0].duration * parseFloat(progressAmount))); 
+	var currentTime = parseSecsToString(parseInt(songQueue[0].duration * parseFloat(progressFraction))); 
 
 	var timeDisplayStr = `${currentTime} / ${totalTime}`;
-	$('#song-progress-time').html(timeDisplayStr);	
+	$('#song-progress-time').html(timeDisplayStr);
 }
 
 
@@ -436,11 +446,18 @@ function handleServerCommand(command) {
 
 	switch (primaryCommand) {
 		case "play":
-			setPlayPauseDisplay(subCommand);
+			setPlayPauseDisplay(subCommand == '1');
 			break;
 
 		case "vol":
 			setDisplayVolume(subCommand);
+			break;
+
+		case "repeat":
+			break;
+
+		case "status":
+
 			break;
 
 		case "progress":
