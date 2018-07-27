@@ -2,6 +2,7 @@
 
 #include "control.h"
 #include "network.h"
+#include "audio.h"
 
 #include <pthread.h>
 #include <stdio.h>
@@ -27,6 +28,7 @@ static int initializeModules()
         err |= network_init();
 
 	// TODO: Music player
+        err |= audio_init();
 
         return err;
 }

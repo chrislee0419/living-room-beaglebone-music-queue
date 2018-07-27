@@ -107,6 +107,9 @@ static void debugPrintSongList(void)
                         case CONTROL_SONG_STATUS_REMOVED:
                                 strcpy(statusStr, "REMOVED");
                                 break;
+                        case CONTROL_SONG_STATUS_PLAYING:
+                                strcpy(statusStr, "PLAYING");
+                                break;
                 }
                 printf("file=[%s], id=[%s], status=[%s]\n", current_song->filepath, current_song->vid, statusStr);
                 current_song = current_song->next;
@@ -130,26 +133,30 @@ static int loadNewSong(void)
         int samplesRead;
         int bufEnd;
         short *buf;
+        song_t* song_curr;
 
         // get new song from queue
         pthread_mutex_lock(&mtx_queue);
         if (!song_queue)
                 return ENODATA;
 
-        song_t* song_prev = song_queue;
+        if (song_queue->status == CONTROL_SONG_STATUS_PLAYING) {
+                song_t* song_prev = song_queue;
 
-        // Get a new current song at the front of the queue
-        song_queue = song_queue->next;
-        song_t* song_curr = song_queue;
+                // Get a new current song at the front of the queue
+                song_queue = song_queue->next;
+                song_curr = song_queue;
 
-        deleteAndFreeSong(song_prev);
-
-        // check if the audio file has been downloaded
-        if (song_curr->status != CONTROL_SONG_STATUS_LOADED) {
+                deleteAndFreeSong(song_prev);
+        }
+        if (song_queue->status != CONTROL_SONG_STATUS_LOADED) {
+                // check if the audio file has been downloaded
                 pthread_mutex_unlock(&mtx_queue);
                 return ENODATA;
+        } else {
+                // no song playing previously, load the first song
+                song_curr = song_queue;
         }
-
         pthread_mutex_unlock(&mtx_queue);
 
         // Open file
@@ -265,6 +272,7 @@ static void *audioLoop(void *arg)
                                 continue;
 
                         // take the next song from the queue
+                        // TODO: check for repeat status (set au_buf_start back to 0?)
                         if (loadNewSong()) {
                                 // if queue is empty/error occurred, pause audio playback
                                 control_pauseAudio();

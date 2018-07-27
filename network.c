@@ -23,7 +23,7 @@
 #define CMD_SLAVE_OFFSET        11
 // assuming a youtube video id's minimum length is 10, this is roughly the size
 // of a fully built status response string (minus the queue) with 145 commas
-#define QUEUE_OFFSET            215
+#define QUEUE_OFFSET            222
 
 #define CMD_VOLUME_UP                   "volup"
 #define CMD_VOLUME_DOWN                 "voldown"
@@ -132,6 +132,11 @@ static int queueSystemStatusMessage(struct sockaddr_in sa)
 
         c = buf;
         s = control_getQueue();
+
+        bytes = sprintf(c, "mode=%d\n", control_getMode());
+        if (!bytes)
+                goto out;
+        c += bytes;
 
         bytes = sprintf(c, "vol=%d\n", audio_getVolume());
         if (!bytes)
