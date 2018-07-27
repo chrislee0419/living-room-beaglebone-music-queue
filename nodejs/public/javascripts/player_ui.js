@@ -359,7 +359,7 @@ function setSongProgress(progressInput) {
 	console.log(progressInput, nums, progressFraction);
 
 	var totalTime = parseSecsToString(songQueue[0].duration); 
-	var currentTime = parseSecsToString(parseInt(songQueue[0].duration * parseFloat(progressFraction))); 
+	var currentTime = parseSecsToString(Math.round(songQueue[0].duration * parseFloat(progressFraction))); 
 
 	var timeDisplayStr = `${currentTime} / ${totalTime}`;
 	$('#song-progress-time').html(timeDisplayStr);
