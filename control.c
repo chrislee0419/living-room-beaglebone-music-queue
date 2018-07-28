@@ -17,20 +17,11 @@
 #define DATA_OFFSET_INTO_WAVE   44
 #define SAMPLE_SIZE             (sizeof(short))
 
-#define SLAVE_BUF_SIZE          2000
-#define PING_DELAY_S            3
-#define PING_CHECK_FREQ         3
+#define SLAVE_BUF_SIZE          5000
 
 #define NUM_SONGS_TO_DOWNLOAD 3
 
-typedef struct slave_dev {
-        int active;
-        struct sockaddr_in addr;
-        struct slave_dev *next;
-} slave_dev_t;
-
 static enum control_mode mode = CONTROL_MODE_MASTER;
-static slave_dev_t *slave_dev_list = NULL;
 
 static song_t *song_queue = NULL;
 
@@ -48,7 +39,6 @@ static pthread_t th_aud;
 static pthread_t th_ping;
 static pthread_mutex_t mtx_audio = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mtx_queue = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t mtx_slist = PTHREAD_MUTEX_INITIALIZER;
 
 /*
  * Helper functions
@@ -215,9 +205,9 @@ static int loadNewSong(void)
 
 static void sendAudioToSlave(short *aubuf, unsigned int size)
 {
+        // TODO: needs to be redone because we're doing broadcast
         char *buf;
         unsigned int buf_size;
-        slave_dev_t *s;
 
         buf_size = sizeof(char) * SAMPLE_SIZE * size + strlen("audio\n");
         buf = malloc(buf_size);
@@ -230,14 +220,6 @@ static void sendAudioToSlave(short *aubuf, unsigned int size)
         // copy audio data, prepended by the "audio" command
         (void)strcpy(buf, "audio\n");
         (void)memcpy(buf + strlen("audio\n"), aubuf, size);
-
-        pthread_mutex_lock(&mtx_slist);
-        s = slave_dev_list;
-        while (s) {
-                network_sendData(buf, buf_size, s->addr);
-                s = s->next;
-        }
-        pthread_mutex_unlock(&mtx_slist);
 }
 
 static void clearSongQueue(void)
@@ -331,57 +313,6 @@ static void *audioLoop(void *arg)
         return NULL;
 }
 
-static void *pingLoop(void *arg)
-{
-        int counter = 0;
-        slave_dev_t *s;
-
-        while (loop) {
-                s = slave_dev_list;
-
-                while (s) {
-                        network_sendPing(s->addr);
-                        s = s->next;
-                }
-
-                counter++;
-                sleep(PING_DELAY_S);
-
-                if (counter >= PING_CHECK_FREQ) {
-                        slave_dev_t *prev = NULL;
-
-                        counter = 0;
-
-                        // check if all slave devices are still active
-                        pthread_mutex_lock(&mtx_slist);
-                        s = slave_dev_list;
-
-                        while (s) {
-                                // remove inactive slave
-                                if (!s->active) {
-                                        // check if it is the head of the linked list
-                                        if (!prev) {
-                                                slave_dev_list = s->next;
-                                                free(s);
-                                                s = slave_dev_list;
-                                        } else {
-                                                prev->next = s->next;
-                                                free(s);
-                                        }
-
-                                        continue;
-                                }
-
-                                prev = s;
-                                s = s->next;
-                        }
-                        pthread_mutex_unlock(&mtx_slist);
-                }
-        }
-
-        return NULL;
-}
-
 /*
  * Public functions
  */
@@ -395,16 +326,12 @@ int control_init(void)
 
         if ((err = pthread_create(&th_aud, NULL, audioLoop, NULL)))
                 printf(PRINTF_MODULE "Error: unable to create thread for audio\n");
-        else if ((err = pthread_create(&th_ping, NULL, pingLoop, NULL)))
-                printf(PRINTF_MODULE "Error: unable to create thread for pinging slave devices\n");
 
         return err;
 }
 
 void control_cleanup(void)
 {
-        slave_dev_t *s;
-
         loop = 0;
 
         (void)pthread_join(th_aud, NULL);
@@ -422,16 +349,6 @@ void control_cleanup(void)
                 au_buf = NULL;
         }
         pthread_mutex_unlock(&mtx_audio);
-
-        // clear slave list
-        pthread_mutex_lock(&mtx_slist);
-        s = slave_dev_list;
-        while (s) {
-                slave_dev_list = s->next;
-                free(s);
-                s = slave_dev_list;
-        }
-        pthread_mutex_unlock(&mtx_slist);
 }
 
 void control_setMode(enum control_mode m)
@@ -659,41 +576,6 @@ const song_t *control_getQueue(void)
 {
         return song_queue;
 }
-
-void control_addSlave(struct sockaddr_in addr)
-{
-        slave_dev_t *s = malloc(sizeof(slave_dev_t));
-        if (!s) {
-                printf(PRINTF_MODULE "Warning: unable to add slave device\n");
-                return;
-        }
-
-        s->active = 1;
-        s->addr = addr;
-
-        pthread_mutex_lock(&mtx_slist);
-        s->next = slave_dev_list;
-        slave_dev_list = s;
-        pthread_mutex_unlock(&mtx_slist);
-}
-
-void control_verifySlaveStatus(struct sockaddr_in addr)
-{
-        pthread_mutex_lock(&mtx_slist);
-        slave_dev_t *s = slave_dev_list;
-        while (s) {
-                if (s->addr.sin_addr.s_addr == addr.sin_addr.s_addr) {
-                        s->active = 1;
-                        pthread_mutex_unlock(&mtx_slist);
-                        return;
-                }
-        }
-
-        pthread_mutex_unlock(&mtx_slist);
-
-        printf(PRINTF_MODULE "Warning: unable to verify slave status, no slave with the provided address\n");
-}
-
 
 void control_onDownloadComplete(void) {
         control_playAudio();

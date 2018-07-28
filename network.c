@@ -276,21 +276,9 @@ static void processMessage(char *buf, struct sockaddr_in sa)
         if (strstr(buf, "statusping\n")) {
                 // web ui ping - send system status
                 (void)queueSystemStatusMessage(sa);
-        } else if (strstr(buf, "ping\n")) {
-                // master/slave ping - used check connection
-                unsigned int mode;
-
-                mode = control_getMode();
-
-                if (mode == CONTROL_MODE_MASTER) {
-                } else if (mode == CONTROL_MODE_SLAVE) {
-                        queueOutboundMessage("ping\n", strlen("ping\n")+1, sa);
-                }
-        } else if (strstr(buf, "connect\n")) {
-                // connection request from new slave device
-                control_addSlave(sa);
         } else if (strstr(buf, "audio\n")) {
                 // audio data from master device
+                // TODO
         } else if (strstr(buf, "cmd\n")) {
                 char *cmd, *c;
                 int err = 0;
