@@ -65,11 +65,7 @@ static void updateDownloadedSongs(void)
                         break;
                 } 
 
-                if (current_song->status == CONTROL_SONG_STATUS_LOADING
-                        || current_song->status == CONTROL_SONG_STATUS_LOADED) {
-                        // Do nothing
-                }
-                else if (current_song->status == CONTROL_SONG_STATUS_QUEUED) {
+                if (current_song->status == CONTROL_SONG_STATUS_QUEUED) {
                         // Download the song in new thread
                         downloader_queueDownloadSong(current_song);
 
