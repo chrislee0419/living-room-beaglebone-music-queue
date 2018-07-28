@@ -5,6 +5,7 @@
 #include "downloader.h"
 #include "main.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,6 +23,9 @@
 #define PING_CHECK_FREQ         3
 
 #define NUM_SONGS_TO_DOWNLOAD 3
+
+static const char* CACHE_DIR = "/root/cache/";
+static const char* WAV_EXT = ".wav";
 
 typedef struct slave_dev {
         int active;
@@ -68,9 +72,6 @@ static void updateDownloadedSongs(void)
                 if (current_song->status == CONTROL_SONG_STATUS_QUEUED) {
                         // Download the song in new thread
                         downloader_queueDownloadSong(current_song);
-
-                        // Update song status
-                        current_song->status = CONTROL_SONG_STATUS_LOADING;
                 }
                 else if (current_song->status == CONTROL_SONG_STATUS_REMOVED) {
                         // Tried to remove song while downloading
@@ -112,13 +113,74 @@ static void debugPrintSongList(void)
         }
 }
 
-static void deleteAndFreeSong(song_t* song) {
-        if (song->status == CONTROL_SONG_STATUS_LOADED) {
-                // TODO: delete wav file on disk
-                // only delete if the song does not appear again in the queue
+void control_deleteAndFreeSong(song_t* song) {
+
+        bool shouldRemoveFromQueue = false;
+        bool shouldDeleteFile = false;
+        bool shouldFree = false;
+
+        if (song->status == CONTROL_SONG_STATUS_QUEUED) {
+                shouldRemoveFromQueue = true;
+                shouldFree = true;
+        }
+        else if (song->status == CONTROL_SONG_STATUS_LOADING) {
+                // Dangerous to delete while downloading
+                // Set status to delete later by the Downloader
+                control_setSongStatus(song, CONTROL_SONG_STATUS_REMOVED);
+                shouldRemoveFromQueue = true;
+        }
+        else if (song->status == CONTROL_SONG_STATUS_LOADED
+                || song->status == CONTROL_SONG_STATUS_PLAYING) {
+                shouldRemoveFromQueue = true;
+                shouldDeleteFile = true;
+                shouldFree = true;
+        }
+        else if (song->status == CONTROL_SONG_STATUS_REMOVED) {
+                shouldDeleteFile = true;
+                shouldFree = true;
         }
 
-        free(song);
+        if (shouldRemoveFromQueue) {
+                pthread_mutex_lock(&mtx_queue);
+                // If deleting the first song, update the song_queue
+                if (song == song_queue) {
+                        song_queue = song->next;
+                }
+                else {      
+                        // Otherwise find predecessor and make it point to the next song  
+                        song_t* prev_song = song_queue;
+                        while(prev_song && prev_song->next != song) {
+                                prev_song = prev_song->next;
+                        }
+
+                        if (prev_song) {
+                                prev_song->next = song->next;
+                        }
+                }
+                pthread_mutex_unlock(&mtx_queue);
+        }
+
+        if (shouldDeleteFile) {
+                // Delete wav file on disk
+                // only delete if the song does not appear again in the queue
+                bool isSongDuplicated = false;
+                song_t* curr_song = song_queue;
+                while (curr_song) {
+                        if (curr_song->vid == song->vid) {
+                                isSongDuplicated = true;
+                                break;
+                        }
+                        curr_song = curr_song->next;
+                }
+
+                if (!isSongDuplicated) {
+                        downloader_deleteSongFile(song);
+                }
+        }
+
+        if (shouldFree) {
+                free(song);
+        }
 }
 
 // Called when a song is done playing
@@ -139,11 +201,11 @@ static int loadNewSong(void)
         }
 
         if (song_queue->status == CONTROL_SONG_STATUS_PLAYING) {
+                // Delete first song, and move next song into queue
                 song_t* song_prev = song_queue;
-
-                // Get a new current song at the front of the queue
-                song_queue = song_queue->next;
-                deleteAndFreeSong(song_prev);
+                pthread_mutex_unlock(&mtx_queue);
+                control_deleteAndFreeSong(song_prev);
+                pthread_mutex_lock(&mtx_queue);
         }
 
         if (!song_queue) {
@@ -544,6 +606,7 @@ void control_skipSong(void)
                         was_playing = 1;
                 }
 
+                // TODO: Handle skipping when song is still loading
                 if (loadNewSong()) {
                         // if queue is empty/error occurred, pause audio playback
                         control_pauseAudio();
@@ -569,8 +632,12 @@ void control_addSong(char *url)
 {
         song_t* new_song = malloc(sizeof(song_t));
 
-        strcpy(new_song->filepath, "");
         strcpy(new_song->vid, url);
+
+        // Update song with .wav filepath
+        strcpy(new_song->filepath, CACHE_DIR);
+        strcat(new_song->filepath, new_song->vid);
+        strcat(new_song->filepath, WAV_EXT);
 
         new_song->next = NULL;
         new_song->status = CONTROL_SONG_STATUS_QUEUED;
@@ -588,9 +655,10 @@ void control_addSong(char *url)
                 current_song->next = new_song;
         }
 
+        pthread_mutex_unlock(&mtx_queue);
+
         // Download songs if needed
         updateDownloadedSongs();
-        pthread_mutex_unlock(&mtx_queue);
 
         debugPrintSongList();
 }
@@ -691,6 +759,11 @@ void control_verifySlaveStatus(struct sockaddr_in addr)
 }
 
 
-void control_onDownloadComplete(void) {
-        control_playAudio();
+void control_onDownloadComplete(song_t* song) {
+        if (song->status == CONTROL_SONG_STATUS_REMOVED) {
+                control_deleteAndFreeSong(song);
+        }
+        else {
+                control_playAudio();
+        }
 }

@@ -141,7 +141,8 @@ void control_verifySlaveStatus(struct sockaddr_in addr);
 
 /**
  * Callback when a download completes
+ * @param song Address of song that finished downloading
  */
-void control_onDownloadComplete(void);
+void control_onDownloadComplete(song_t* song);
 
 #endif
