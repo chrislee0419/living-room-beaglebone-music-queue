@@ -173,10 +173,8 @@ function refreshSongTableHtml() {
 			var playingIcon = "";
 			if (i == 0) {
 				currentlyPlayingClass = " class=\"song-currently-playing\"";
-				playingIcon = "<i class=\"fas fa-play\"></i>";
+				playingIcon = getPlayingIcon();
 			}
-
-
 
 			const newRowHtmlString = `
 <tr${currentlyPlayingClass}>
@@ -237,6 +235,33 @@ function handleSongQueueData(data) {
 	else {
 		deferRefreshSongTableHtml(numValidVids);
 	}
+}
+
+
+const SONG_STATUS_UNKNOWN     = -1;
+const SONG_STATUS_QUEUED      = 0;
+const SONG_STATUS_LOADING     = 1;
+const SONG_STATUS_LOADED      = 2;
+const SONG_STATUS_REMOVED     = 3;
+const SONG_STATUS_PLAYING     = 4;
+
+var currentSongStatus = SONG_STATUS_UNKNOWN;
+function handleSongStatus(statusData) {
+	currentSongStatus = parseInt(statusData);
+}
+
+function getPlayingIcon() {
+	var iconClass = "";
+	switch(currentSongStatus) {
+		case SONG_STATUS_LOADING:
+			iconClass = "fas fa-spinner fa-spin";
+			break;
+		case SONG_STATUS_PLAYING:
+			iconClass = "fas fa-play";
+			break;
+	}
+
+	return `<i class=\"${iconClass}\"></i>`;
 }
 
 
@@ -457,7 +482,7 @@ function handleServerCommand(command) {
 			break;
 
 		case "status":
-
+			handleSongStatus(subCommand)
 			break;
 
 		case "progress":
