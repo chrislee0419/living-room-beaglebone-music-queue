@@ -203,25 +203,6 @@ static int loadNewSong(void)
         return 0;
 }
 
-static void sendAudioToSlave(short *aubuf, unsigned int size)
-{
-        // TODO: needs to be redone because we're doing broadcast
-        char *buf;
-        unsigned int buf_size;
-
-        buf_size = sizeof(char) * SAMPLE_SIZE * size + strlen("audio\n");
-        buf = malloc(buf_size);
-        if (!buf) {
-                printf(PRINTF_MODULE "Warning: unable to allocate memory for slave audio buffer\n");
-                (void)fflush(stdout);
-                return;
-        }
-
-        // copy audio data, prepended by the "audio" command
-        (void)strcpy(buf, "audio\n");
-        (void)memcpy(buf + strlen("audio\n"), aubuf, size);
-}
-
 static void clearSongQueue(void)
 {
         song_t *s;
@@ -250,26 +231,34 @@ static void *audioLoop(void *arg)
                 pthread_mutex_lock(&mtx_play);
                 pthread_mutex_unlock(&mtx_play);
 
+                pthread_mutex_lock(&mtx_audio);
+
+
                 // take new song from the top of the queue if:
                 // - au_buf (audio data from file) is NULL
                 // - end of the current song is reached
                 if (!au_buf || au_buf_end <= au_buf_start ) {
                         // busy waiting during slave mode
                         // audio data can come from master at any time
-                        if (mode == CONTROL_MODE_SLAVE)
-                                continue;
-
-                        // take the next song from the queue
-                        // TODO: check for repeat status (set au_buf_start back to 0?)
-                        if (loadNewSong()) {
-                                // if queue is empty/error occurred, pause audio playback
-                                control_pauseAudio();
+                        if (mode == CONTROL_MODE_SLAVE) {
+                                pthread_mutex_unlock(&mtx_audio);
                                 continue;
                         }
-                }
 
-                // play audio
-                pthread_mutex_lock(&mtx_audio);
+                        // take the next song from the queue
+                        if (au_buf && repeat_status && song_queue) {
+                                au_buf_start = 0;
+                        } else {
+                                // unlock the audio mutex, as loadNewSong will need it
+                                pthread_mutex_unlock(&mtx_audio);
+                                if (loadNewSong()) {
+                                        // if queue is empty/error occurred, pause audio playback
+                                        control_pauseAudio();
+                                        continue;
+                                }
+                                pthread_mutex_lock(&mtx_audio);
+                        }
+                }
 
                 if (!au_buf) {
                         pthread_mutex_unlock(&mtx_audio);
@@ -304,7 +293,7 @@ static void *audioLoop(void *arg)
 
                 // send audio to slave devices
                 if (mode == CONTROL_MODE_SLAVE)
-                        sendAudioToSlave(buf, num_played);
+                        network_sendAudio((char *)buf, num_played * sizeof(short) / sizeof(char));
 
                 au_buf_start += num_played;
                 pthread_mutex_unlock(&mtx_audio);
@@ -353,25 +342,25 @@ void control_cleanup(void)
 
 void control_setMode(enum control_mode m)
 {
-        // NOTE: "connect" command should be sent after this in the network module
         mode = m;
 
         control_pauseAudio();
         audio_stopAudio();
 
-        clearSongQueue();
-
-        pthread_mutex_lock(&mtx_audio);
-        if (au_buf) {
-                free(au_buf);
-                au_buf = NULL;
-        }
-
-        au_buf_start = 0;
-        au_buf_end = 0;
-        pthread_mutex_unlock(&mtx_audio);
-
         if (m == CONTROL_MODE_SLAVE) {
+                clearSongQueue();
+
+                // remove existing buffer if it exists
+                pthread_mutex_lock(&mtx_audio);
+                if (au_buf) {
+                        free(au_buf);
+                        au_buf = NULL;
+                }
+
+                au_buf_start = 0;
+                au_buf_end = 0;
+                pthread_mutex_unlock(&mtx_audio);
+
                 // set static buf for slave device
                 pthread_mutex_lock(&mtx_audio);
                 au_buf = malloc(SLAVE_BUF_SIZE);
