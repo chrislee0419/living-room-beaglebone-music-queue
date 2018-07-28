@@ -12,7 +12,7 @@
 #define DEFAULT_VOLUME  80
 #define NUM_CHANNELS    2
 #define SAMPLE_RATE     44100
-#define BUFFER_SIZE_US  5e6
+#define BUFFER_SIZE_US  5e4
 
 static snd_pcm_t *handle;
 static int volume = 0;
