@@ -170,17 +170,15 @@ function refreshSongTableHtml() {
 			
 			// Add class for first song
 			var currentlyPlayingClass = "";
-			var playingIcon = "";
+			var statusIcon = "";
 			if (i == 0) {
 				currentlyPlayingClass = " class=\"song-currently-playing\"";
-				playingIcon = "<i class=\"fas fa-play\"></i>";
+				statusIcon = `<i id=\"song-status-icon\" class="${getStatusIconClass()}"></i>`;
 			}
-
-
 
 			const newRowHtmlString = `
 <tr${currentlyPlayingClass}>
-	<td>${playingIcon}</td>
+	<td>${statusIcon}</td>
 	<td><a href="https://www.youtube.com/watch?v=${song.id}">${song.title}</a></td>
 	<td>${parseSecsToString(song.duration)}</td>
 	<td>
@@ -237,6 +235,40 @@ function handleSongQueueData(data) {
 	else {
 		deferRefreshSongTableHtml(numValidVids);
 	}
+}
+
+
+const SONG_STATUS_UNKNOWN     = -1;
+const SONG_STATUS_QUEUED      = 0;
+const SONG_STATUS_LOADING     = 1;
+const SONG_STATUS_LOADED      = 2;
+const SONG_STATUS_REMOVED     = 3;
+const SONG_STATUS_PLAYING     = 4;
+
+var currentSongStatus = SONG_STATUS_UNKNOWN;
+function handleSongStatus(statusData) {
+	var newSongStatus = parseInt(statusData);
+	if (currentSongStatus != newSongStatus)
+	{
+		currentSongStatus = newSongStatus;
+		if (currentSongStatus != SONG_STATUS_UNKNOWN) {
+			$("#song-status-icon").attr("class", getStatusIconClass());
+		}
+	}
+}
+
+function getStatusIconClass() {
+	var iconClass = "";
+	switch(currentSongStatus) {
+		case SONG_STATUS_LOADING:
+			iconClass = "fas fa-spinner fa-spin";
+			break;
+		case SONG_STATUS_PLAYING:
+			iconClass = "fas fa-play";
+			break;
+	}
+
+	return iconClass;
 }
 
 
@@ -457,7 +489,7 @@ function handleServerCommand(command) {
 			break;
 
 		case "status":
-
+			handleSongStatus(subCommand)
 			break;
 
 		case "progress":

@@ -15,12 +15,12 @@ enum control_mode {
 };
 
 enum control_song_status {
-        CONTROL_SONG_STATUS_UNKNOWN = -1,
-        CONTROL_SONG_STATUS_QUEUED,
-        CONTROL_SONG_STATUS_LOADING,
-        CONTROL_SONG_STATUS_LOADED,
-        CONTROL_SONG_STATUS_REMOVED,            // When song is removed while downloading
-        CONTROL_SONG_STATUS_PLAYING
+        CONTROL_SONG_STATUS_UNKNOWN     = -1,
+        CONTROL_SONG_STATUS_QUEUED      = 0,
+        CONTROL_SONG_STATUS_LOADING     = 1,
+        CONTROL_SONG_STATUS_LOADED      = 2,
+        CONTROL_SONG_STATUS_REMOVED     = 3,            // When song is removed while downloading
+        CONTROL_SONG_STATUS_PLAYING     = 4
 };
 
 typedef struct song {
