@@ -2,7 +2,7 @@ OUTFILE = musicPlayer
 OUTDIR = $(HOME)/cmpt433/public/myApps
 
 CC_C = arm-linux-gnueabihf-gcc
-CFLAGS = -Wall -g -std=c99 -D _POSIX_C_SOURCE=200809L -Werror
+CFLAGS = -Wall -g -std=c99 -D _POSIX_C_SOURCE=200809L -D_GNU_SOURCE -Werror
 LFLAGS = -L$(HOME)/cmpt433/public/asound_lib_BBB
 LIBS = -lpthread -lasound
 
