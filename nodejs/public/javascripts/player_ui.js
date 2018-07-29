@@ -53,6 +53,7 @@ $(document).ready(function() {
 
 const CMD_VOLUME_UP   = "volup";
 const CMD_VOLUME_DOWN = "voldown";
+const CMD_VOLUME 	  = "vol=";
 const CMD_PLAY        = "play";
 const CMD_PAUSE       = "pause";
 const CMD_SKIP        = "skip";
@@ -340,8 +341,13 @@ function sendVolumeDown() {
 	sendServerCommand(CMD_VOLUME_DOWN); 
 }
 
+function sendVolumeValue(val) {
+	sendServerCommand(CMD_VOLUME + val);
+}
+
 function setDisplayVolume(newVolume) {
-	$('#volumeId').html(parseInt(newVolume));
+	$('#volume-display-val').html(parseInt(newVolume));
+	$("#vol-control").attr("value", newVolume);
 }
 
 

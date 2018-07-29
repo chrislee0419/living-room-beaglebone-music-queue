@@ -40,6 +40,8 @@
 #define CMD_REMOVE_SONG_SSCANF_MATCHES  2
 #define CMD_REPEAT_SONG                 "repeat=%d"
 #define CMD_REPEAT_SONG_SSCANF_MATCHES  1
+#define CMD_SET_VOL                     "vol=%d"
+#define CMD_SET_VOL_SSCANF_MATCHES      1
 #define CMD_CHANGE_MODE                 "mode="
 #define CMD_GET_MCAST                   "getmcast"
 #define CMD_MCAST                       "mcast=%u:%u"
@@ -234,6 +236,8 @@ static int processCmd(char *buf)
                 audio_setVolume(audio_getVolume() + VOL_DIFF);
         } else if (strstr(buf, CMD_VOLUME_DOWN)) {
                 audio_setVolume(audio_getVolume() - VOL_DIFF);
+        } else if (sscanf(buf, CMD_SET_VOL, &num) == CMD_SET_VOL_SSCANF_MATCHES) {
+                audio_setVolume(num);
         } else if (strstr(buf, CMD_PLAY)) {
                 control_playAudio();
         } else if (strstr(buf, CMD_PAUSE)) {

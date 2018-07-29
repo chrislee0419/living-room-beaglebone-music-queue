@@ -76,7 +76,7 @@ h1, h2 {
 	color: Orange;
 }
 
-#volumeId,
+#volume-display-val,
 #song-progress-time {
 	margin: 10px;
 	color: white;
