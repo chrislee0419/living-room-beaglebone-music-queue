@@ -1,8 +1,6 @@
 #ifndef _AUDIO_H_
 #define _AUDIO_H_
 
-#include "mp3towav.h"
-
 #define AUDIO_VOLUME_MIN        0
 #define AUDIO_VOLUME_MAX        100
 

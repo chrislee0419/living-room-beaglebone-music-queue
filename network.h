@@ -35,18 +35,10 @@ void network_sendPauseCmd(struct sockaddr_in addr);
 void network_sendSkipCmd(struct sockaddr_in addr);
 
 /**
- * Send data to an address. Mainly used for sending audio data.
- * NOTE: prepend audio data with "audio\n"
+ * Multicast audio data.
  * @param buf Buffer of data to send
  * @param len Size of buffer
- * @param addr Address of destination
  */
-void network_sendData(char *buf, unsigned int len, struct sockaddr_in addr);
-
-/**
- * Send a ping to slave devices
- * @param addr Address of destination
- */
-void network_sendPing(struct sockaddr_in addr);
+void network_sendAudio(char *buf, unsigned int len);
 
 #endif

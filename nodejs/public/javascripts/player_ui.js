@@ -55,7 +55,7 @@ const CMD_REPEAT_SONG = "repeat=";
 const CMD_CHANGE_MODE = "mode";
 
 function sendServerCommand(data) {
-	socket.emit('clientCommand', 'cmd\n' + data + '\n');
+	socket.emit('clientCommand', data + '\n');
 };
 
 

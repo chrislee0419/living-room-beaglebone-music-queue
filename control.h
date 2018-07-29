@@ -128,18 +128,6 @@ void control_getSongProgress(int *curr, int *end);
 const song_t *control_getQueue(void);
 
 /**
- * Register a slave device
- * @param addr Address associated with slave device
- */
-void control_addSlave(struct sockaddr_in addr);
-
-/**
- * To be called when the slave device successfully responds to a ping
- * @param addr Address associated with slave device
- */
-void control_verifySlaveStatus(struct sockaddr_in addr);
-
-/**
  * Callback when a download completes
  * @param song Address of song that finished downloading
  */
