@@ -118,6 +118,8 @@ void control_deleteAndFreeSong(song_t* song) {
         printf(PRINTF_MODULE "Info: Deleting song - ");
         debugPrintSong(song);
 
+        if (!song) return;
+
         bool shouldRemoveFromQueue = false;
         bool shouldDeleteFile = false;
         bool shouldFree = false;
