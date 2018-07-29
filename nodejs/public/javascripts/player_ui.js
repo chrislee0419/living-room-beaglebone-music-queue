@@ -20,6 +20,7 @@ $(document).ready(function() {
 	// Register callback functions for each button
 	$('#btn-addsong').click(function() { submitSongLink(); });
 
+	$('#btn-repeat').click(	function() { sendRepeatSong(); });
 	$('#btn-playpause').click(	function() { sendPlayPause(); });
 	$('#btn-skipsong').click(	function() { sendSkipSong(); });
 
@@ -293,16 +294,31 @@ function setPlayPauseDisplay(isPlayingInput) {
 	
 	// Change play/puase button display
 	if (isPlaying) {
-		$("#btn-playpause").attr("class", "fas fa-pause-circle fa-4x");
+		$("#btn-playpause").attr("class", "fas fa-pause-circle fa-4x playback-icon");
 	}
 	else {
-		$("#btn-playpause").attr("class", "fas fa-play-circle fa-4x");
+		$("#btn-playpause").attr("class", "fas fa-play-circle fa-4x playback-icon");
 	}
 }
 
 
 function sendSkipSong() {
 	sendServerCommand(CMD_SKIP);
+}
+
+
+var isRepeating = false;
+function sendRepeatSong() {
+	isRepeating = !isRepeating;
+
+	if(isRepeating) {
+		sendServerCommand(CMD_REPEAT_SONG + '1');
+		$("#btn-repeat").addClass("playback-icon-selected").removeClass("playback-icon");
+	}
+	else {
+		sendServerCommand(CMD_REPEAT_SONG + '0');
+		$("#btn-repeat").addClass("playback-icon").removeClass("playback-icon-selected");
+	}
 }
 
 

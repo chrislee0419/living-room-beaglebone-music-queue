@@ -68,6 +68,14 @@ h1, h2 {
 	cursor: pointer;
 }
 
+.playback-icon {
+	color: White;
+}
+
+.playback-icon-selected {
+	color: Orange;
+}
+
 #volumeId,
 #song-progress-time {
 	margin: 10px;
