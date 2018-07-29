@@ -118,7 +118,7 @@ static void enqueueSong(song_t* song)
 
 static song_t* dequeueSong()
 {
-    if (fifoHeadIndex == fifoTailIndex) {
+    if (songFifoQueue[fifoHeadIndex] == NULL) {
         return NULL;
     }
 
