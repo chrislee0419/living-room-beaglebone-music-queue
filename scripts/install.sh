@@ -56,7 +56,7 @@ systemctl enable musicWeb.service
 # might need to have a command in C app if we're still allowing custom multicast IPs
 route | grep "224.255.255.255" >/dev/null
 if [ $? -eq 1 ]; then
-        route add 224.0.0.0/4 dev eth0
+        ip route add 224.0.0.0/4 dev eth0
 fi
 
 echo "Installation completed successfully!"
