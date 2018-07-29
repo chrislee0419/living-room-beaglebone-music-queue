@@ -18,6 +18,12 @@ var lastUpdateTimeNodejs = Date.now();
 $(document).ready(function() {
 
 	// Register callback functions for each button
+	$("#new-song-input").keyup(function(event) {
+	    if (event.keyCode === 13) {
+	        $("#btn-addsong").click();
+	    }
+	});
+
 	$('#btn-addsong').click(function() { submitSongLink(); });
 
 	$('#btn-repeat').click(	function() { sendRepeatSong(); });
@@ -403,8 +409,6 @@ function setSongProgress(progressInput) {
 	else {
 		progressFraction = parseFloat(nums[0]) / parseFloat(nums[1]);
 	}	
-
-	console.log(progressInput, nums, progressFraction);
 
 	var totalTime = parseSecsToString(songQueue[0].duration); 
 	var currentTime = parseSecsToString(Math.round(songQueue[0].duration * parseFloat(progressFraction))); 
