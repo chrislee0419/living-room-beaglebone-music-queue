@@ -361,8 +361,10 @@ static void processMessage(char *buf, struct sockaddr_in sa)
                 if (*c == '\n' || (c-buf) >= BUFFER_SIZE) {
                         *c = '\0';
 
-                        printf(PRINTF_MODULE "Notice: processing command: \"%s\"\n", cmd);
-                        (void)fflush(stdout);
+                        if (!strstr(cmd, CMD_STATUS_PING)) {
+                                printf(PRINTF_MODULE "Notice: processing command: \"%s\"\n", cmd);
+                                (void)fflush(stdout);
+                        }
 
                         if ((err = processCmd(cmd)))
                                 break;
