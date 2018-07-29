@@ -25,12 +25,6 @@
 static const char* CACHE_DIR = "/root/cache/";
 static const char* WAV_EXT = ".wav";
 
-typedef struct slave_dev {
-        int active;
-        struct sockaddr_in addr;
-        struct slave_dev *next;
-} slave_dev_t;
-
 static enum control_mode mode = CONTROL_MODE_MASTER;
 
 static song_t *song_queue = NULL;
@@ -665,49 +659,12 @@ const song_t *control_getQueue(void)
         return song_queue;
 }
 
-void control_addSlave(struct sockaddr_in addr)
+void control_onDownloadComplete(song_t* song) 
 {
-        slave_dev_t *s = malloc(sizeof(slave_dev_t));
-        if (!s) {
-                printf(PRINTF_MODULE "Warning: unable to add slave device\n");
-                return;
-        }
-
-        s->active = 1;
-        s->addr = addr;
-
-        pthread_mutex_lock(&mtx_slist);
-        s->next = slave_dev_list;
-        slave_dev_list = s;
-        pthread_mutex_unlock(&mtx_slist);
-}
-
-void control_verifySlaveStatus(struct sockaddr_in addr)
-{
-        pthread_mutex_lock(&mtx_slist);
-        slave_dev_t *s = slave_dev_list;
-        while (s) {
-                if (s->addr.sin_addr.s_addr == addr.sin_addr.s_addr) {
-                        s->active = 1;
-                        pthread_mutex_unlock(&mtx_slist);
-                        return;
-                }
-        }
-
-        pthread_mutex_unlock(&mtx_slist);
-
-        printf(PRINTF_MODULE "Warning: unable to verify slave status, no slave with the provided address\n");
-}
-
-
-void control_onDownloadComplete(song_t* song) {
         if (song->status == CONTROL_SONG_STATUS_REMOVED) {
                 control_deleteAndFreeSong(song);
         }
         else {
                 control_playAudio();
         }
-
-void control_onDownloadComplete(void) {
-        control_playAudio();
 }
