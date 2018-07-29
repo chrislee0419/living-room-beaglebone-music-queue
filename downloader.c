@@ -12,8 +12,8 @@
 
 #define CMDLINE_MAX_LEN 1024
 static const char* DOWNLOAD_CMDLINE = "youtube-dl --extract-audio --audio-format wav -o '~/cache/%%(id)s.%%(ext)s' --postprocessor-args \"-ar 44100\" https://www.youtube.com/watch?v=%s";
-static const char* RM_CACHE_CMDLINE = "rm ~/cache/*";
-static const char* WAV_EXT = ".wav";
+static const char* RM_CACHE_CMDLINE = "rm /root/cache/*";
+static const char* RM_CMDLINE = "rm %s";
 
 #define FIFO_QUEUE_SIZE 5
 static song_t* songFifoQueue[FIFO_QUEUE_SIZE];
@@ -58,6 +58,22 @@ void downloader_cleanup(void)
 
 void downloader_queueDownloadSong(song_t* song) 
 {
+    if (song->status != CONTROL_SONG_STATUS_QUEUED) {
+        printf(PRINTF_MODULE "Warning: Song is not in expected status QUEUED, skipping\n");
+        return;
+    }
+
+    // Check if the file exists already
+    if (!access(song->filepath, F_OK)) {
+        printf(PRINTF_MODULE "Notice: music file already exists, item not queued\n");
+        pthread_mutex_unlock(&fifoMutex);
+
+        control_setSongStatus(song, CONTROL_SONG_STATUS_LOADED);
+        return;
+    }
+
+    // Update to LOADING status
+    control_setSongStatus(song, CONTROL_SONG_STATUS_LOADING);
     enqueueSong(song);
 
     // Spawn download thread if it's not running
@@ -65,12 +81,20 @@ void downloader_queueDownloadSong(song_t* song)
         pthread_t pDownloadThread;
                 pthread_attr_t attr;
 
-                // set detached thread state, so join is not necessary for cleanup
-                (void)pthread_attr_init(&attr);
-                (void)pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+        // set detached thread state, so join is not necessary for cleanup
+        (void)pthread_attr_init(&attr);
+        (void)pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
         (void)pthread_create(&pDownloadThread, &attr, &downloadThread, 0);
-                (void)pthread_attr_destroy(&attr);
+        (void)pthread_attr_destroy(&attr);
     }
+}
+
+void downloader_deleteSongFile(song_t* song)
+{        
+    // Run $rm /root/cache/____.wav
+    char cmdline[CMDLINE_MAX_LEN];
+    sprintf(cmdline, RM_CMDLINE, song->filepath);
+    system(cmdline);
 }
 
 
@@ -86,13 +110,6 @@ static void enqueueSong(song_t* song)
             pthread_mutex_unlock(&fifoMutex);
         return;
     }
-
-        // Check if the file exists already
-        if (!access(song->filepath, F_OK)) {
-                printf(PRINTF_MODULE "Notice: music file already exists, item not queued\n");
-                pthread_mutex_unlock(&fifoMutex);
-                return;
-        }
 
     songFifoQueue[fifoTailIndex] = song;
     fifoTailIndex = (fifoTailIndex + 1) % FIFO_QUEUE_SIZE;
@@ -120,33 +137,20 @@ static void* downloadThread()
     // Keep downloading as long as there are songs in the queue
     song_t* song = dequeueSong();
     while (song) {
-        if (strcmp(song->filepath, "") != 0) {
-                printf(PRINTF_MODULE "Warning: Song does not have an empty file path, skipping\n");
-                song = dequeueSong();
-                continue;
+        if (song->status != CONTROL_SONG_STATUS_LOADING) {
+            printf(PRINTF_MODULE "Warning: Song is not in expected status LOADING, skipping\n");
+        }
+        else {
+            // Run youtube-dl to download youtube audio as .wav file
+            char cmdline[CMDLINE_MAX_LEN];
+            sprintf(cmdline, DOWNLOAD_CMDLINE, song->vid);
+            system(cmdline);
+
+            // Update to LOADED status
+            control_setSongStatus(song, CONTROL_SONG_STATUS_LOADED);
         }
 
-        // Run youtube-dl to download youtube audio as .wav file
-        char cmdline[CMDLINE_MAX_LEN];
-        sprintf(cmdline, DOWNLOAD_CMDLINE, song->vid);
-
-        system(cmdline);
-
-        // Update song with .wav filepath
-        strcat(song->filepath, "/root/cache/");
-        strcat(song->filepath, song->vid);
-        strcat(song->filepath, WAV_EXT);
-
-        // Update song status
-        int status = control_setSongStatus(song, CONTROL_SONG_STATUS_LOADED);
-
-        // Remove song if the status was set to removed
-        if (status == CONTROL_SONG_STATUS_REMOVED) {
-                // TODO: remove song file if it isn't duplicated in the queue
-                // should probably call control_removeSong
-        }
-
-        control_onDownloadComplete();
+        control_onDownloadComplete(song);
 
         song = dequeueSong();
     }
