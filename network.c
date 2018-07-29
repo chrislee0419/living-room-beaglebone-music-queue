@@ -47,7 +47,7 @@
 #define CMD_MCAST_SSCANF_MATCHES        2
 
 #define SEND_MCAST_IP                   -1
-#define DEFAULT_MCAST_IP                "224.0.0.0"
+#define DEFAULT_MCAST_IP                "224.255.255.255"
 #define MCAST_TIMEOUT_US                1e5
 #define MCAST_RESET_US                  MCAST_TIMEOUT_US * 2
 
@@ -275,7 +275,7 @@ static int processCmd(char *buf)
                                 return EADDRNOTAVAIL;
                         }
 
-                        mcast_addr.sin_port = port;
+                        mcast_addr.sin_port = htons(port);
                         mcast_addr.sin_addr.s_addr = addr;
 
                         control_setMode(CONTROL_MODE_MASTER);
@@ -312,7 +312,7 @@ static int processCmd(char *buf)
                         }
 
                         // send request to master to obtain the multicast IP
-                        queueOutboundMessage("getmcast", strlen("getmcast") + 1, sa);
+                        queueOutboundMessage(CMD_GET_MCAST, strlen(CMD_GET_MCAST) + 1, sa);
 
                         // NOTE: device isn't changed to slave mode here,
                         // must get multicast IP first
@@ -462,7 +462,7 @@ static void *senderLoop(void *arg)
 static void *mcastReceiverLoop(void *arg)
 {
         int fd = 0;
-        struct ip_mreqn mreq;
+        struct ip_mreq mreq;
         fd_set rfds;
         struct timeval timeout;
         struct sockaddr_in sa;
@@ -476,15 +476,20 @@ static void *mcastReceiverLoop(void *arg)
                 pthread_mutex_lock(&mtx_mcast);
                 pthread_mutex_unlock(&mtx_mcast);
 
-                if (getSocketFD(mcast_addr.sin_port, &fd))
+                if (getSocketFD(mcast_addr.sin_port, &fd)) {
+                        printf(PRINTF_MODULE "Error: unable to get socket file descriptor for multicast\n");
+                        (void)fflush(stdout);
                         goto out;
+                }
 
                 mreq.imr_multiaddr.s_addr = mcast_addr.sin_addr.s_addr;
-                mreq.imr_address.s_addr = htonl(INADDR_ANY);
-                mreq.imr_ifindex = 0;
+                mreq.imr_interface.s_addr = htonl(INADDR_ANY);
 
-                if (setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0)
+                if (setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+                        printf(PRINTF_MODULE "Error: unable to join multicast group (%s)\n", strerror(errno));
+                        (void)fflush(stdout);
                         goto out;
+                }
 
                 while (control_getMode() == CONTROL_MODE_SLAVE) {
                         // prepare timeout and file descriptor list
@@ -500,7 +505,7 @@ static void *mcastReceiverLoop(void *arg)
                         if (ret < 0) {
                                 printf(PRINTF_MODULE "Warning: an error has occurred in select(), restarting multicast receiver\n");
                                 (void)fflush(stdout);
-                                goto out2;
+                                goto out;
                         } else if (ret == 0) {
                                 // timeout expired, continue
                                 continue;
@@ -515,7 +520,7 @@ static void *mcastReceiverLoop(void *arg)
                                 if (bytes_recv < 0) {
                                         printf(PRINTF_MODULE "Error: mcastReceiverLoop's recvfrom encountered an error\n");
                                         (void)fflush(stdout);
-                                        goto out2;
+                                        goto out;
                                 }
 
                                 // send audio to control loop
@@ -524,12 +529,7 @@ static void *mcastReceiverLoop(void *arg)
                                 (void)memset(buf, 0, BUFFER_SIZE);
                         }
                 }
-
-                goto out2;
 out:
-                printf(PRINTF_MODULE "Error: unable to set up multicast receiver thread\n");
-                (void)fflush(stdout);
-out2:
                 (void)setsockopt(fd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq));
 
                 if (fd > 0) {
