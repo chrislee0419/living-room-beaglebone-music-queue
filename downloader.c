@@ -138,18 +138,17 @@ static void* downloadThread()
     song_t* song = dequeueSong();
     while (song) {
         if (song->status != CONTROL_SONG_STATUS_LOADING) {
-                printf(PRINTF_MODULE "Warning: Song is not in expected status LOADING, skipping\n");
-                song = dequeueSong();
-                continue;
+            printf(PRINTF_MODULE "Warning: Song is not in expected status LOADING, skipping\n");
         }
+        else {
+            // Run youtube-dl to download youtube audio as .wav file
+            char cmdline[CMDLINE_MAX_LEN];
+            sprintf(cmdline, DOWNLOAD_CMDLINE, song->vid);
+            system(cmdline);
 
-        // Run youtube-dl to download youtube audio as .wav file
-        char cmdline[CMDLINE_MAX_LEN];
-        sprintf(cmdline, DOWNLOAD_CMDLINE, song->vid);
-        system(cmdline);
-
-        // Update to LOADED status
-        control_setSongStatus(song, CONTROL_SONG_STATUS_LOADED);
+            // Update to LOADED status
+            control_setSongStatus(song, CONTROL_SONG_STATUS_LOADED);
+        }
 
         control_onDownloadComplete(song);
 
