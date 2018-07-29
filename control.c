@@ -83,12 +83,14 @@ static void updateDownloadedSongs(void)
         }
 }
 
-static void debugPrintSongList(void)
-{
-        song_t* current_song = song_queue;
-        while (current_song) {
+static void debugPrintSong(song_t* song) {
+
+        if (song == NULL) {
+                printf("NULL song\n");
+        }
+        else {
                 char statusStr[10];
-                switch (current_song->status) {
+                switch (song->status) {
                         case CONTROL_SONG_STATUS_UNKNOWN:
                                 strcpy(statusStr, "UNKNOWN");
                                 break;
@@ -108,14 +110,23 @@ static void debugPrintSongList(void)
                                 strcpy(statusStr, "PLAYING");
                                 break;
                 }
-                printf("file=[%s], id=[%s], status=[%s]\n", current_song->filepath, current_song->vid, statusStr);
+                printf("id=[%s], status=[%s], file=[%s]\n", song->vid, statusStr, song->filepath);
+        }
+}
+
+static void debugPrintSongList(void)
+{
+        song_t* current_song = song_queue;
+        while (current_song) {
+                debugPrintSong(current_song);
                 current_song = current_song->next;
         }
 }
 
 void control_deleteAndFreeSong(song_t* song) {
 
-        printf("control_deleteAndFreeSong on %s status=%d\n", song->vid, song->status);
+        printf(PRINTF_MODULE "Info: Deleting song - ");
+        debugPrintSong(song);
 
         bool shouldRemoveFromQueue = false;
         bool shouldDeleteFile = false;
@@ -134,7 +145,6 @@ void control_deleteAndFreeSong(song_t* song) {
         else if (song->status == CONTROL_SONG_STATUS_LOADED
                 || song->status == CONTROL_SONG_STATUS_PLAYING) {
 
-                printf("control_deleteAndFreeSong 2 on %s status=%d\n", song->vid, song->status);
                 shouldRemoveFromQueue = true;
                 shouldDeleteFile = true;
                 shouldFree = true;
@@ -146,16 +156,12 @@ void control_deleteAndFreeSong(song_t* song) {
 
         if (shouldDeleteFile) {
 
-                printf("control_deleteAndFreeSong 3 on %s status=%d\n", song->vid, song->status);
                 // Delete wav file on disk
                 // only delete if the song does not appear again in the queue
                 bool isSongDuplicated = false;
                 song_t* curr_song = song_queue;
                 while (curr_song) {
-                        printf("control_deleteAndFreeSong 3a on %s status=%d\n", song->vid, song->status);
-                        // TODO: Use strcmp to check for equal vids
-                        if (curr_song->vid == song->vid && curr_song != song) {
-                                printf("control_deleteAndFreeSong 3aa on %s status=%d\n", song->vid, song->status);
+                        if (strcmp(curr_song->vid, song->vid) == 0 && curr_song != song) {
                                 isSongDuplicated = true;
                                 break;
                         }
@@ -163,13 +169,11 @@ void control_deleteAndFreeSong(song_t* song) {
                 }
 
                 if (!isSongDuplicated) {
-                        printf("control_deleteAndFreeSong 3b on %s status=%d\n", song->vid, song->status);
                         downloader_deleteSongFile(song);
                 }
         }
 
         if (shouldRemoveFromQueue) {
-        printf("control_deleteAndFreeSong 4 on %s status=%d\n", song->vid, song->status);
                 pthread_mutex_lock(&mtx_queue);
                 // If deleting the first song, update the song_queue
                 if (song == song_queue) {
@@ -187,10 +191,11 @@ void control_deleteAndFreeSong(song_t* song) {
                         }
                 }
                 pthread_mutex_unlock(&mtx_queue);
+
+                updateDownloadedSongs();
         }
 
         if (shouldFree) {
-        printf("control_deleteAndFreeSong on %s status=%d\n", song->vid, song->status);
                 free(song);
         }
 }
@@ -199,7 +204,6 @@ void control_deleteAndFreeSong(song_t* song) {
 // Or after a song is skipped
 static int loadNewSong(void)
 {
-        printf("loadNewSong\n");
         FILE *file;
         int sizeInBytes;
         int samplesRead;
@@ -235,7 +239,8 @@ static int loadNewSong(void)
         }
         pthread_mutex_unlock(&mtx_queue);
 
-        printf("loadNewSong song_curr is %s\n", song_curr->vid);
+        printf(PRINTF_MODULE "Info: Playing next song ");
+        debugPrintSong(song_curr);
 
         // Open file
         file = fopen(song_curr->filepath, "r");
@@ -273,7 +278,6 @@ static int loadNewSong(void)
 
         fclose(file);
 
-        printf("loadNewSong set song_curr is %s, to PLAYING\n", song_curr->vid);
         control_setSongStatus(song_curr, CONTROL_SONG_STATUS_PLAYING);        
 
         // copy data to au_buf
