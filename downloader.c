@@ -58,14 +58,22 @@ void downloader_cleanup(void)
 
 void downloader_queueDownloadSong(song_t* song) 
 {
-    // Update to LOADING status
     if (song->status != CONTROL_SONG_STATUS_QUEUED) {
         printf(PRINTF_MODULE "Warning: Song is not in expected status QUEUED, skipping\n");
         return;
     }
-    
-    control_setSongStatus(song, CONTROL_SONG_STATUS_LOADING);
 
+    // Check if the file exists already
+    if (!access(song->filepath, F_OK)) {
+        printf(PRINTF_MODULE "Notice: music file already exists, item not queued\n");
+        pthread_mutex_unlock(&fifoMutex);
+
+        control_setSongStatus(song, CONTROL_SONG_STATUS_LOADED);
+        return;
+    }
+
+    // Update to LOADING status
+    control_setSongStatus(song, CONTROL_SONG_STATUS_LOADING);
     enqueueSong(song);
 
     // Spawn download thread if it's not running
@@ -85,7 +93,7 @@ void downloader_deleteSongFile(song_t* song)
 {        
     // Run $rm /root/cache/____.wav
     char cmdline[CMDLINE_MAX_LEN];
-    sprintf(cmdline, RM_CMDLINE, song->vid);
+    sprintf(cmdline, RM_CMDLINE, song->filepath);
     system(cmdline);
 }
 
@@ -102,13 +110,6 @@ static void enqueueSong(song_t* song)
             pthread_mutex_unlock(&fifoMutex);
         return;
     }
-
-        // Check if the file exists already
-        if (!access(song->filepath, F_OK)) {
-                printf(PRINTF_MODULE "Notice: music file already exists, item not queued\n");
-                pthread_mutex_unlock(&fifoMutex);
-                return;
-        }
 
     songFifoQueue[fifoTailIndex] = song;
     fifoTailIndex = (fifoTailIndex + 1) % FIFO_QUEUE_SIZE;
