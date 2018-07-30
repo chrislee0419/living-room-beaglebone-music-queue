@@ -54,7 +54,7 @@ systemctl enable musicWeb.service
 
 # set up routing table for multicasting (default multicasting IP, uses ethernet)
 # might need to have a command in C app if we're still allowing custom multicast IPs
-route | grep "224.255.255.255" >/dev/null
+route | grep "224.0.0.0" >/dev/null
 if [ $? -eq 1 ]; then
         ip route add 224.0.0.0/4 dev eth0
 fi
