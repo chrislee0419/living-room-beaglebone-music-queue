@@ -7,6 +7,8 @@
 #include <pthread.h>
 #include <stdio.h>
 
+#define PRINTF_MODULE   "[main    ] "
+
 static pthread_mutex_t mainMutex = PTHREAD_MUTEX_INITIALIZER;
 
 /*
@@ -17,17 +19,11 @@ static int initializeModules()
 {
         int err = 0;
 
-		printf("Initializing modules\n");
-
+        printf(PRINTF_MODULE "Notice: Initializing modules\n");
+        (void)fflush(stdout);
 
         err |= control_init();
-
-	// TODO: Web interface
-
-	// TODO: Distributed networking setup
         err |= network_init();
-
-	// TODO: Music player
         err |= audio_init();
 
         return err;
@@ -35,25 +31,32 @@ static int initializeModules()
 
 static void shutdownModules()
 {
-	printf("Shutting down modules\n");
+        printf(PRINTF_MODULE "Notice: shutting down modules\n");
+        (void)fflush(stdout);
 
         network_cleanup();
+        control_cleanup();
+        audio_cleanup();
 }
 
 int main()
 {
-	if (initializeModules()) {
-                printf("Unable to start program\n");
+        if (initializeModules()) {
+                printf(PRINTF_MODULE "Error: unable to start program\n");
+                (void)fflush(stdout);
                 return 1;
+        } else {
+                printf(PRINTF_MODULE "Notice: modules initialized successfully\n");
+                (void)fflush(stdout);
         }
 
-	// wait for shutdown to unlock
-	pthread_mutex_lock(&mainMutex);
-	pthread_mutex_lock(&mainMutex);
+        // wait for shutdown to unlock
+        pthread_mutex_lock(&mainMutex);
+        pthread_mutex_lock(&mainMutex);
 
- 	shutdownModules();
+        shutdownModules();
 
-	return 0;
+        return 0;
 }
 
 /*
@@ -61,5 +64,7 @@ int main()
  */
 
 void main_triggerShutdown() {
-	pthread_mutex_unlock(&mainMutex);
+        printf(PRINTF_MODULE "Notice: triggering shutdown\n");
+        (void)fflush(stdout);
+        pthread_mutex_unlock(&mainMutex);
 }
