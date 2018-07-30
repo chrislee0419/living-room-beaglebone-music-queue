@@ -71,6 +71,26 @@ unsigned int audio_playAudio(short *buf, unsigned int size)
         // clamp size parameter to buf_size if necessary
         size = size <= buf_size ? size : buf_size;
 
+#ifdef MP_DESKTOP
+        // check if device is in a runnable state
+        snd_pcm_state_t state = snd_pcm_state(handle);
+        if (state != SND_PCM_STATE_PREPARED &&
+            state != SND_PCM_STATE_RUNNING) {
+                int err;
+
+                err = snd_pcm_prepare(handle);
+                state = snd_pcm_state(handle);
+
+                if ((state != SND_PCM_STATE_PREPARED &&
+                     state != SND_PCM_STATE_RUNNING) ||
+                    err) {
+                        printf(PRINTF_MODULE "Warning: audio handle is not in prepared or running state\n");
+                        (void)fflush(stdout);
+                        return 0;
+                }
+        }
+#endif
+
         pthread_mutex_lock(&mtx);
         frames = snd_pcm_writei(handle, buf, size);
         if (frames < 0) {
@@ -81,7 +101,6 @@ unsigned int audio_playAudio(short *buf, unsigned int size)
                 if (frames < 0) {
                         printf(PRINTF_MODULE "Error: failed to write audio data with snd_pcm_writei\n");
                         (void)fflush(stdout);
-                        pthread_mutex_unlock(&mtx);
                         return frames;
                 }
         }
@@ -116,7 +135,11 @@ void audio_setVolume(unsigned int vol)
 
         snd_mixer_selem_id_alloca(&sid);
         snd_mixer_selem_id_set_index(sid, 0);
+#ifdef MP_DESKTOP
+        snd_mixer_selem_id_set_name(sid, "Master");
+#else
         snd_mixer_selem_id_set_name(sid, "PCM");
+#endif
         elem = snd_mixer_find_selem(hdl, sid);
 
         snd_mixer_selem_get_playback_volume_range(elem, &min, &max);
