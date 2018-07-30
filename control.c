@@ -19,6 +19,7 @@
 #define SAMPLE_SIZE             (sizeof(short))
 
 #define SLAVE_BUF_SIZE          5000
+#define SLAVE_AUDIO_WAIT_US     4e4
 
 #define NUM_SONGS_TO_DOWNLOAD 3
 
@@ -43,6 +44,8 @@ static pthread_t th_aud;
 static pthread_t th_ping;
 static pthread_mutex_t mtx_audio = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mtx_queue = PTHREAD_MUTEX_INITIALIZER;
+
+static struct timespec slave_wait = { .tv_nsec = SLAVE_AUDIO_WAIT_US };
 
 /*
  * Helper functions
@@ -314,16 +317,20 @@ static void *audioLoop(void *arg)
 
                 pthread_mutex_lock(&mtx_audio);
 
-
                 // take new song from the top of the queue if:
                 // - au_buf (audio data from file) is NULL
                 // - end of the current song is reached
-                // - Song is skipped
-                if (!au_buf || au_buf_end <= au_buf_start) {
+                if (!au_buf ||
+                    (mode == CONTROL_MODE_MASTER && au_buf_end < au_buf_start) ||
+                    au_buf_end == au_buf_start) {
                         // busy waiting during slave mode
                         // audio data can come from master at any time
                         if (mode == CONTROL_MODE_SLAVE) {
+                                audio_stopAudio();
                                 pthread_mutex_unlock(&mtx_audio);
+                                printf(PRINTF_MODULE "Warning: exhausted audio buffer\n");
+                                (void)fflush(stdout);
+                                nanosleep(&slave_wait, NULL);
                                 continue;
                         }
 
@@ -351,14 +358,14 @@ static void *audioLoop(void *arg)
                 // handle circular buffer for slave
                 if (mode == CONTROL_MODE_SLAVE && au_buf_start > au_buf_end) {
                         buf = au_buf + au_buf_start;
-                        num_played = audio_playAudio(buf, SLAVE_BUF_SIZE - au_buf_start - 1);
+                        num_played = audio_playAudio(buf, SLAVE_BUF_SIZE - au_buf_start);
 
-                        if (num_played < 0) {
-                                pthread_mutex_unlock(&mtx_audio);
-                                continue;
-                        }
+                        if (num_played > 0)
+                                au_buf_start = (au_buf_start + num_played) % SLAVE_BUF_SIZE;
 
-                        au_buf_start = 0;
+
+                        pthread_mutex_unlock(&mtx_audio);
+                        continue;
                 } else if (mode == CONTROL_MODE_UNKNOWN) {
                         pthread_mutex_unlock(&mtx_audio);
                         control_pauseAudio();
@@ -374,10 +381,11 @@ static void *audioLoop(void *arg)
                 }
 
                 // send audio to slave devices
-                if (mode == CONTROL_MODE_SLAVE)
+                if (mode == CONTROL_MODE_MASTER)
                         network_sendAudio((char *)buf, num_played * sizeof(short) / sizeof(char));
 
                 au_buf_start += num_played;
+
                 pthread_mutex_unlock(&mtx_audio);
         }
 
@@ -451,6 +459,9 @@ void control_setMode(enum control_mode m)
                         main_triggerShutdown();
                 }
                 pthread_mutex_unlock(&mtx_audio);
+
+                // set audio to always be playing
+                control_playAudio();
         }
 }
 
@@ -466,6 +477,12 @@ void control_queueAudio(char *buf, unsigned int length)
         if (mode != CONTROL_MODE_SLAVE)
                 return;
 
+        if (length == 0) {
+                printf(PRINTF_MODULE "Warning: no audio data received from master\n");
+                (void)fflush(stdout);
+                return;
+        }
+
         pthread_mutex_lock(&mtx_audio);
         if (!au_buf) {
                 pthread_mutex_unlock(&mtx_audio);
@@ -474,17 +491,29 @@ void control_queueAudio(char *buf, unsigned int length)
 
         // check if the entirety of the received buffer will fit in the audio buffer
         // otherwise we can only store some of the received audio
-        if (au_buf_start <= au_buf_end)
-                available = au_buf_end - au_buf_start;
+        if (au_buf_start < au_buf_end)
+                available = SLAVE_BUF_SIZE - (au_buf_end - au_buf_start) - 1;
         else
-                available = SLAVE_BUF_SIZE - au_buf_start + au_buf_end;
+                available = au_buf_start - au_buf_end - 1;
 
-        length = available < length ? available : length;
+        if (length > available) {
+                length = available;
+
+                if (length == 0) {
+                        pthread_mutex_unlock(&mtx_audio);
+                        printf(PRINTF_MODULE "Warning: tried to enqueue audio when buffer is full\n");
+                        (void)fflush(stdout);
+                        return;
+                }
+
+                printf(PRINTF_MODULE "Warning: truncating received audio data\n");
+                (void)fflush(stdout);
+        }
 
         // copy received audio data
-        if (au_buf_end + length > SLAVE_BUF_SIZE) {
+        if (au_buf_end + length >= SLAVE_BUF_SIZE) {
                 (void)memcpy(au_buf + au_buf_end, buf, SLAVE_BUF_SIZE - au_buf_end);
-                length = length - SLAVE_BUF_SIZE - au_buf_end;
+                length = length - (SLAVE_BUF_SIZE - au_buf_end);
                 au_buf_end = 0;
         }
 
@@ -496,17 +525,15 @@ void control_queueAudio(char *buf, unsigned int length)
 
 void control_playAudio(void)
 {
-        if (mode == CONTROL_MODE_MASTER) {
-                // check if it is already playing
-                if (play_status)
-                        return;
+        // check if it is already playing
+        if (play_status)
+                return;
 
-                // NOTE: play_status change must occur after changing the mutex
-                pthread_mutex_unlock(&mtx_play);
-                play_status = 1;
+        // NOTE: play_status change must occur after changing the mutex
+        pthread_mutex_unlock(&mtx_play);
+        play_status = 1;
 
-                // if buffer is empty, next song should be enqueued by audioLoop
-        }
+        // if buffer is empty, next song should be enqueued by audioLoop
 }
 
 void control_pauseAudio(void)
