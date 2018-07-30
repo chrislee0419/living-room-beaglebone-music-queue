@@ -10,8 +10,8 @@
 
 enum control_mode {
         CONTROL_MODE_UNKNOWN = -1,
-        CONTROL_MODE_MASTER,
-        CONTROL_MODE_SLAVE
+        CONTROL_MODE_MASTER  = 0,
+        CONTROL_MODE_SLAVE   = 1
 };
 
 enum control_song_status {

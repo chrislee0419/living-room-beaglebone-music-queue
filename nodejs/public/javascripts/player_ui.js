@@ -431,8 +431,8 @@ function setSongProgress(progressInput) {
 // Master/slave device connection settings
 //========================================================================
 
-const DEVICE_MODE_MASTER = "master";
-const DEVICE_MODE_SLAVE = "slave";
+const DEVICE_MODE_MASTER = 0;
+const DEVICE_MODE_SLAVE = 1;
 
 var deviceMode = DEVICE_MODE_MASTER;
 
@@ -441,11 +441,15 @@ function getServerMode() {
 }
 
 function setDeviceMode(newMode) {
-        // This should update a string instead,
-        // otherwise the radio buttons keep switching
-        // also, mode is returned with a 0 or a 1, referring to the enums
-        // in the control module header file
-        /*
+    // This should update a string instead,
+    // otherwise the radio buttons keep switching
+    // also, mode is returned with a 0 or a 1, referring to the enums
+    // in the control module header file
+
+	if (isModalVisible('#settings-modal')) {
+		return;
+	}
+
 	deviceMode = newMode;
 	if (deviceMode == DEVICE_MODE_MASTER) {
 		$('#radioModeMaster').prop("checked", true);
@@ -455,7 +459,6 @@ function setDeviceMode(newMode) {
 		$('#radioModeMaster').prop("checked", false);
 		$('#radioModeSlave').prop("checked", true);
 	}
-        */
 
 	handleModeChange();
 }
@@ -482,6 +485,10 @@ function saveSettings() {
 		var addressInput = $('#inputMasterIp').val();
 		sendServerCommand(CMD_CHANGE_MODE + deviceMode + ',' + addressInput);
 	}
+}
+
+function isModalVisible(modalId) {
+	return $(modalId).hasClass('show');
 }
 
 //
