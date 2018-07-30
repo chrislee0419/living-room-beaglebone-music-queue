@@ -60,7 +60,7 @@ const CMD_SKIP        = "skip";
 const CMD_ADD_SONG    = "addsong=";
 const CMD_REMOVE_SONG = "rmsong=";
 const CMD_REPEAT_SONG = "repeat=";
-const CMD_CHANGE_MODE = "mode";
+const CMD_CHANGE_MODE = "mode=";
 
 function sendServerCommand(data) {
 	socket.emit('clientCommand', data + '\n');
@@ -438,6 +438,11 @@ function getServerMode() {
 }
 
 function setDeviceMode(newMode) {
+        // This should update a string instead,
+        // otherwise the radio buttons keep switching
+        // also, mode is returned with a 0 or a 1, referring to the enums
+        // in the control module header file
+        /*
 	deviceMode = newMode;
 	if (deviceMode == DEVICE_MODE_MASTER) {
 		$('#radioModeMaster').prop("checked", true);
@@ -447,6 +452,7 @@ function setDeviceMode(newMode) {
 		$('#radioModeMaster').prop("checked", false);
 		$('#radioModeSlave').prop("checked", true);
 	}
+        */
 
 	handleModeChange();
 }
