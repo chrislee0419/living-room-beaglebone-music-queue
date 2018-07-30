@@ -4,6 +4,7 @@
 #include "audio.h"
 #include "downloader.h"
 #include "main.h"
+#include "disp.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -121,6 +122,24 @@ static void debugPrintSongList(void)
         }
 }
 
+#ifndef MP_DESKTOP
+static int getSongQueueLength(void)
+{
+        int length = 0;
+        song_t *s;
+
+        pthread_mutex_lock(&mtx_queue);
+        s = song_queue;
+        while (s) {
+                s = s->next;
+                length++;
+        }
+        pthread_mutex_unlock(&mtx_queue);
+
+        return length;
+}
+#endif
+
 void control_deleteAndFreeSong(song_t* song) {
 
         printf(PRINTF_MODULE "Info: Deleting song - ");
@@ -223,6 +242,9 @@ static int loadNewSong(void)
                 song_t* song_prev = song_queue;
                 pthread_mutex_unlock(&mtx_queue);
                 control_deleteAndFreeSong(song_prev);
+#ifndef MP_DESKTOP
+                disp_setNumber(getSongQueueLength());
+#endif
                 pthread_mutex_lock(&mtx_queue);
         }
 
@@ -570,6 +592,9 @@ void control_skipSong(void)
                 // TODO: Handle skipping when song is still loading
                 // TODO: Reset audio to 0
                 control_deleteAndFreeSong(song_queue);
+#ifndef MP_DESKTOP
+                disp_setNumber(getSongQueueLength());
+#endif
 
                 // Delete the current buf, so we're forced to load a new one
                 pthread_mutex_lock(&mtx_audio);
@@ -628,6 +653,10 @@ void control_addSong(char *url)
         // Download songs if needed
         updateDownloadedSongs();
 
+#ifndef MP_DESKTOP
+        disp_setNumber(getSongQueueLength());
+#endif
+
         debugPrintSongList();
 }
 
@@ -646,6 +675,10 @@ int control_removeSong(char *url, int index)
 
         // Download new songs if needed
         updateDownloadedSongs();
+
+#ifndef MP_DESKTOP
+        disp_setNumber(getSongQueueLength());
+#endif
 
         return 0;
 }

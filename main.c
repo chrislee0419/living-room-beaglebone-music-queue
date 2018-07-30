@@ -4,6 +4,10 @@
 #include "network.h"
 #include "audio.h"
 
+#ifndef MP_DESKTOP
+#include "disp.h"
+#endif
+
 #include <pthread.h>
 #include <stdio.h>
 
@@ -25,6 +29,9 @@ static int initializeModules()
         err |= control_init();
         err |= network_init();
         err |= audio_init();
+#ifndef MP_DESKTOP
+        err |= disp_init();
+#endif
 
         return err;
 }
@@ -37,6 +44,9 @@ static void shutdownModules()
         network_cleanup();
         control_cleanup();
         audio_cleanup();
+#ifndef MP_DESKTOP
+        disp_cleanup();
+#endif
 }
 
 int main()
