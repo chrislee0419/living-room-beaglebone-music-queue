@@ -45,8 +45,8 @@ mkdir -p /root/musicPlayer
 
 cp /mnt/remote/myApps/musicPlayer /root/musicPlayer/
 cp -r /mnt/remote/myApps/music-player-nodejs-copy /root/musicPlayer/nodejs
-cp /mnt/remote/myApps/musicPlayerServices/musicApp.service /etc/systemd/system/
-cp /mnt/remote/myApps/musicPlayerServices/musicWeb.service /etc/systemd/system/
+cp /mnt/remote/myApps/music-player-services/musicApp.service /etc/systemd/system/
+cp /mnt/remote/myApps/music-player-services/musicWeb.service /etc/systemd/system/
 
 # set services to start during startup
 systemctl enable musicApp.service
