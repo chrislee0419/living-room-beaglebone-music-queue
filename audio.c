@@ -12,11 +12,11 @@
 #define DEFAULT_VOLUME  80
 #define NUM_CHANNELS    2
 #define SAMPLE_RATE     44100
-#define BUFFER_SIZE_US  5e4
+#define BUFFER_SIZE_US  1e3
 
 static snd_pcm_t *handle;
 static int volume = 0;
-static unsigned long buf_size = 0;
+static unsigned long buf_frames = 0;
 
 static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
 
@@ -48,7 +48,7 @@ int audio_init(void)
         if (err)
                 goto out;
 
-        err = snd_pcm_get_params(handle, &unused, &buf_size);
+        err = snd_pcm_get_params(handle, &unused, &buf_frames);
 out:
         if (err) {
                 printf(PRINTF_MODULE "Error: could not initialize module\n");
@@ -67,11 +67,13 @@ void audio_cleanup(void)
 unsigned int audio_playAudio(short *buf, unsigned int size)
 {
         snd_pcm_sframes_t frames;
+	unsigned int frames_available;
 
-        // clamp size parameter to buf_size if necessary
-        size = size <= buf_size ? size : buf_size;
+	frames_available = size / NUM_CHANNELS;
 
-#ifdef MP_DESKTOP
+        // clamp size parameter to buf_frames if necessary
+        frames_available = frames_available <= buf_frames ? frames_available : buf_frames;
+
         // check if device is in a runnable state
         snd_pcm_state_t state = snd_pcm_state(handle);
         if (state != SND_PCM_STATE_PREPARED &&
@@ -89,10 +91,9 @@ unsigned int audio_playAudio(short *buf, unsigned int size)
                         return 0;
                 }
         }
-#endif
 
         pthread_mutex_lock(&mtx);
-        frames = snd_pcm_writei(handle, buf, size);
+        frames = snd_pcm_writei(handle, buf, frames_available);
         if (frames < 0) {
                 printf(PRINTF_MODULE "Warning: snd_pcm_writei returned %li\n", frames);
                 (void)fflush(stdout);
