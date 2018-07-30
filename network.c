@@ -13,6 +13,7 @@
 #include <time.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <sched.h>
 #include <errno.h>
 
 #define PRINTF_MODULE           "[network ] "
@@ -53,6 +54,8 @@
 #define MCAST_TIMEOUT_US                1e5
 #define MCAST_RESET_US                  MCAST_TIMEOUT_US * 2
 
+#define MAX_AUDIO_PACKET_SIZE           256
+
 #define VOL_DIFF                        5
 
 static int loop = 0;
@@ -62,6 +65,7 @@ static pthread_t th_mcast;
 
 struct out_msg {
         char buf[BUFFER_SIZE];
+        int msg_len;
         struct sockaddr_in out_addr;
         struct out_msg *next;
 };
@@ -121,6 +125,7 @@ static void queueOutboundMessage(char *buf, unsigned int buf_size, struct sockad
 
         (void)memset(msg, 0, sizeof(struct out_msg));
         (void)strncpy(msg->buf, buf, buf_size);
+        msg->msg_len = buf_size;
         msg->out_addr = sa;
 
         pthread_mutex_lock(&mtx_queue);
@@ -456,7 +461,7 @@ static void *senderLoop(void *arg)
                 {
                         msg = out_queue;
 
-                        if (sendto(fd, msg->buf, strlen(msg->buf), 0,
+                        if (sendto(fd, msg->buf, msg->msg_len, 0,
                             (struct sockaddr *)&(msg->out_addr), sizeof(msg->out_addr)) < 0) {
                                 printf(PRINTF_MODULE "Warning: sendto failed (%s)\n", strerror(errno));
                                 (void)fflush(stdout);
@@ -539,10 +544,6 @@ static void *mcastReceiverLoop(void *arg)
                                         goto out;
                                 }
 
-                                // temporary printing
-                                printf(PRINTF_MODULE "Notice: audio received\n");
-                                (void)fflush(stdout);
-
                                 // send audio to control loop
                                 control_queueAudio(buf, bytes_recv);
 
@@ -568,6 +569,7 @@ out:
 int network_init(void)
 {
         int err = 0;
+        struct sched_param params;
 
         loop = 1;
 
@@ -581,12 +583,23 @@ int network_init(void)
 
         pthread_mutex_lock(&mtx_mcast);
 
-        if ((err = pthread_create(&th_rx, NULL, receiverLoop, NULL)))
+        if ((err = pthread_create(&th_rx, NULL, receiverLoop, NULL))) {
                 printf(PRINTF_MODULE "Error: unable to create thread for incoming UDP connections\n");
-        else if ((err = pthread_create(&th_tx, NULL, senderLoop, NULL)))
+                return err;
+        } else if ((err = pthread_create(&th_tx, NULL, senderLoop, NULL))) {
                 printf(PRINTF_MODULE "Error: unable to create thread for outgoing UDP connections\n");
-        else if ((err = pthread_create(&th_mcast, NULL, mcastReceiverLoop, NULL)))
+                return err;
+        } else if ((err = pthread_create(&th_mcast, NULL, mcastReceiverLoop, NULL))) {
                 printf(PRINTF_MODULE "Error: unable to create thread for receiving multicasts\n");
+                return err;
+        }
+
+        // set higher scheduling priority for multicast receiver thread
+        params.sched_priority = sched_get_priority_max(SCHED_FIFO);
+
+        err = pthread_setschedparam(th_mcast, SCHED_FIFO, &params);
+        if (err)
+                printf(PRINTF_MODULE "Error: unable to schedule a higher priority for multicast receiver thread\n");
 
         return err;
 }
@@ -611,29 +624,26 @@ void network_cleanup(void)
 
 void network_sendPlayCmd(struct sockaddr_in addr)
 {
-        queueOutboundMessage("cmd\n" CMD_PLAY "\n", strlen("cmd\n" CMD_PLAY "\n")+1, addr);
+        queueOutboundMessage(CMD_PLAY "\n", strlen(CMD_PLAY "\n")+1, addr);
 }
 
 void network_sendPauseCmd(struct sockaddr_in addr)
 {
-        queueOutboundMessage("cmd\n" CMD_PAUSE "\n", strlen("cmd\n" CMD_PAUSE "\n")+1, addr);
+        queueOutboundMessage(CMD_PAUSE "\n", strlen(CMD_PAUSE "\n")+1, addr);
 }
 
 void network_sendSkipCmd(struct sockaddr_in addr)
 {
-        queueOutboundMessage("cmd\n" CMD_SKIP "\n", strlen("cmd\n" CMD_SKIP "\n")+1, addr);
+        queueOutboundMessage(CMD_SKIP "\n", strlen(CMD_SKIP "\n")+1, addr);
 }
 
 void network_sendAudio(char *buf, unsigned int len)
 {
         unsigned int size;
 
-        printf(PRINTF_MODULE "Notice: multicasting audio\n");
-        (void)fflush(stdout);
-
         // break up bufer into smaller chunks if too large
         while (len > 0) {
-                size = len > NETWORK_MAX_BUFFER_SIZE ? NETWORK_MAX_BUFFER_SIZE : len;
+                size = len > MAX_AUDIO_PACKET_SIZE ? MAX_AUDIO_PACKET_SIZE : len;
 
                 queueOutboundMessage(buf, size, mcast_addr);
 
