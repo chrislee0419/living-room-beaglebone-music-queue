@@ -214,15 +214,18 @@ function youtube_parser(url){
 }
 
 var prevQueueData = "undefined";
-function handleSongQueueData(data) {
-	// Update things only if data is different
-	if (data == prevQueueData) {
-		return;
+function handleSongQueueData(data, appendData=false) {
+	if (!appendData) {
+		// Update things only if data is different
+		if (data == prevQueueData) {
+			return;
+		}
+
+		prevQueueData = data;
+
+		emptyQueue();
 	}
 
-	prevQueueData = data;
-
-	emptyQueue();
 
 	// Queue data is video IDs separated by delimiters
 	var videoId;
@@ -402,7 +405,7 @@ function parseSecsToString(totalSeconds) {
 // Updates the time display for currently playing song
 // Input is a string "123/435" of the fraction representing the progress
 function setSongProgress(progressInput) {
-	if (!songQueue[0]) {
+	if (songQueue.length == 0) {
 		$('#song-progress-time').html(defaultTimeDisplay);
 		return;
 	}
@@ -537,7 +540,7 @@ function handleServerCommand(command) {
 			break;
 
 		case "queuemore":
-			handleSongQueueData(subCommand);
+			handleSongQueueData(subCommand, true);
 			break;
 
 		default:
