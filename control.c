@@ -18,12 +18,17 @@
 #define DATA_OFFSET_INTO_WAVE   44
 #define SAMPLE_SIZE             (sizeof(short))
 
-#define SLAVE_BUF_SIZE          5000
-#define SLAVE_AUDIO_WAIT_US     4e4
+#define SLAVE_BUF_SIZE          30000
+#define SLAVE_AUDIO_WAIT_US     1e4
+#define SLAVE_PLAY_DELAY_US     1
 
 #define NUM_SONGS_TO_DOWNLOAD 3
 
+#ifdef MP_DESKTOP
+static const char *CACHE_DIR = "/home/chris/cache/";
+#else
 static const char* CACHE_DIR = "/root/cache/";
+#endif
 static const char* WAV_EXT = ".wav";
 
 static enum control_mode mode = CONTROL_MODE_MASTER;
@@ -321,20 +326,18 @@ static void *audioLoop(void *arg)
                 // - au_buf (audio data from file) is NULL
                 // - end of the current song is reached
                 if (!au_buf ||
-                    (mode == CONTROL_MODE_MASTER && au_buf_end < au_buf_start) ||
-                    au_buf_end == au_buf_start) {
+                    (mode == CONTROL_MODE_MASTER && au_buf_end-1 <= au_buf_start) ||
+                    au_buf_end-1 == au_buf_start) {
                         // busy waiting during slave mode
                         // audio data can come from master at any time
                         if (mode == CONTROL_MODE_SLAVE) {
                                 audio_stopAudio();
                                 pthread_mutex_unlock(&mtx_audio);
-                                printf(PRINTF_MODULE "Warning: exhausted audio buffer\n");
-                                (void)fflush(stdout);
                                 nanosleep(&slave_wait, NULL);
                                 continue;
                         }
 
-                        // take the next song from the queue
+                        // repeat song if set
                         if (au_buf && repeat_status && song_queue) {
                                 au_buf_start = 0;
                         } else {
@@ -362,7 +365,6 @@ static void *audioLoop(void *arg)
 
                         if (num_played > 0)
                                 au_buf_start = (au_buf_start + num_played) % SLAVE_BUF_SIZE;
-
 
                         pthread_mutex_unlock(&mtx_audio);
                         continue;
@@ -448,12 +450,12 @@ void control_setMode(enum control_mode m)
                 }
 
                 au_buf_start = 0;
-                au_buf_end = 0;
+                au_buf_end = 1;
                 pthread_mutex_unlock(&mtx_audio);
 
                 // set static buf for slave device
                 pthread_mutex_lock(&mtx_audio);
-                au_buf = malloc(SLAVE_BUF_SIZE);
+                au_buf = malloc(SLAVE_BUF_SIZE * sizeof(*au_buf));
                 if (!au_buf) {
                         printf(PRINTF_MODULE "Error: unable to allocate memory for audio buffer while setting slave mode\n");
                         main_triggerShutdown();
@@ -472,7 +474,7 @@ enum control_mode control_getMode(void)
 
 void control_queueAudio(char *buf, unsigned int length)
 {
-        int available;
+        int available, available_bytes;
 
         if (mode != CONTROL_MODE_SLAVE)
                 return;
@@ -496,8 +498,10 @@ void control_queueAudio(char *buf, unsigned int length)
         else
                 available = au_buf_start - au_buf_end - 1;
 
-        if (length > available) {
-                length = available;
+	available_bytes = available * sizeof(short);
+	
+        if (length > available_bytes) {
+                length = available_bytes;
 
                 if (length == 0) {
                         pthread_mutex_unlock(&mtx_audio);
@@ -511,14 +515,14 @@ void control_queueAudio(char *buf, unsigned int length)
         }
 
         // copy received audio data
-        if (au_buf_end + length >= SLAVE_BUF_SIZE) {
-                (void)memcpy(au_buf + au_buf_end, buf, SLAVE_BUF_SIZE - au_buf_end);
-                length = length - (SLAVE_BUF_SIZE - au_buf_end);
+        if (au_buf_end + length/sizeof(short) >= SLAVE_BUF_SIZE) {
+                (void)memcpy(au_buf + au_buf_end, buf, (SLAVE_BUF_SIZE - au_buf_end) * sizeof(short));
+                length = length - (SLAVE_BUF_SIZE - au_buf_end) * sizeof(short);
                 au_buf_end = 0;
         }
 
         (void)memcpy(au_buf + au_buf_end, buf, length);
-        au_buf_end += length;
+        au_buf_end += length / sizeof(short);
 
         pthread_mutex_unlock(&mtx_audio);
 }
