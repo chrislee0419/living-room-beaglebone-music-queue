@@ -44,7 +44,7 @@
 #define CMD_SET_VOL_SSCANF_MATCHES      1
 #define CMD_CHANGE_MODE                 "mode="
 #define CMD_GET_MCAST                   "getmcast"
-#define CMD_MCAST                       "mcast=%u:%u"
+#define CMD_MCAST                       "mcast=%u:%hu"
 #define CMD_MCAST_BUF_SIZE              32
 #define CMD_MCAST_SSCANF_MATCHES        2
 
@@ -228,7 +228,7 @@ static int processCmd(char *buf)
         char url[CONTROL_MAXLEN_VID] = {0};
         int num = 0;
         unsigned int mcast_ip = 0;
-        unsigned int mcast_port = 0;
+        unsigned short mcast_port = 0;
 
         if (strstr(buf, CMD_PING)) {
                 // do nothing, since a status message is return on valid commands
@@ -286,6 +286,9 @@ static int processCmd(char *buf)
 
                         // lock mcast receiver thread if it isn't already
                         (void)pthread_mutex_trylock(&mtx_mcast);
+
+                        printf(PRINTF_MODULE "Notice: setting device to master mode\n");
+                        (void)fflush(stdout);
                 } else if (strstr(buf, "slave,")) {
                         struct sockaddr_in sa;
 
@@ -340,6 +343,9 @@ static int processCmd(char *buf)
 
                 // unlock multicast receiver thread
                 pthread_mutex_unlock(&mtx_mcast);
+
+                printf(PRINTF_MODULE "Notice: setting device to slave mode\n");
+                (void)fflush(stdout);
         } else {
                 printf(PRINTF_MODULE "Warning: invalid command received (\"%s\")\n", buf);
                 (void)fflush(stdout);
@@ -361,7 +367,7 @@ static void processMessage(char *buf, struct sockaddr_in sa)
                 if (*c == '\n' || (c-buf) >= BUFFER_SIZE) {
                         *c = '\0';
 
-                        if (!strstr(cmd, CMD_STATUS_PING)) {
+                        if (!strstr(cmd, CMD_PING)) {
                                 printf(PRINTF_MODULE "Notice: processing command: \"%s\"\n", cmd);
                                 (void)fflush(stdout);
                         }
@@ -482,7 +488,7 @@ static void *mcastReceiverLoop(void *arg)
                 pthread_mutex_lock(&mtx_mcast);
                 pthread_mutex_unlock(&mtx_mcast);
 
-                if (getSocketFD(mcast_addr.sin_port, &fd)) {
+                if (getSocketFD(ntohs(mcast_addr.sin_port), &fd)) {
                         printf(PRINTF_MODULE "Error: unable to get socket file descriptor for multicast\n");
                         (void)fflush(stdout);
                         goto out;
@@ -496,6 +502,10 @@ static void *mcastReceiverLoop(void *arg)
                         (void)fflush(stdout);
                         goto out;
                 }
+
+                printf(PRINTF_MODULE "Notice: starting multicast receiver thread at %u:%hu\n",
+                        ntohl(mcast_addr.sin_addr.s_addr), ntohs(mcast_addr.sin_port));
+                (void)fflush(stdout);
 
                 while (control_getMode() == CONTROL_MODE_SLAVE) {
                         // prepare timeout and file descriptor list
@@ -528,6 +538,10 @@ static void *mcastReceiverLoop(void *arg)
                                         (void)fflush(stdout);
                                         goto out;
                                 }
+
+                                // temporary printing
+                                printf(PRINTF_MODULE "Notice: audio received\n");
+                                (void)fflush(stdout);
 
                                 // send audio to control loop
                                 control_queueAudio(buf, bytes_recv);
@@ -613,6 +627,9 @@ void network_sendSkipCmd(struct sockaddr_in addr)
 void network_sendAudio(char *buf, unsigned int len)
 {
         unsigned int size;
+
+        printf(PRINTF_MODULE "Notice: multicasting audio\n");
+        (void)fflush(stdout);
 
         // break up bufer into smaller chunks if too large
         while (len > 0) {
