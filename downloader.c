@@ -12,7 +12,11 @@
 
 #define CMDLINE_MAX_LEN 1024
 static const char* DOWNLOAD_CMDLINE = "youtube-dl --extract-audio --audio-format wav -o '~/cache/%%(id)s.%%(ext)s' --postprocessor-args \"-ar 44100\" https://www.youtube.com/watch?v=%s";
+#ifdef MP_DESKTOP
+static const char* RM_CACHE_CMDLINE = "rm /home/chris/cache/*";
+#else
 static const char* RM_CACHE_CMDLINE = "rm /root/cache/*";
+#endif
 static const char* RM_CMDLINE = "rm %s";
 
 #define FIFO_QUEUE_SIZE 5
