@@ -1,56 +1,90 @@
 <!DOCTYPE html>
 <html lang='en'>
 <head>
-	<title>BeagleBone Music Player</title>
+	<title>Music Queue</title>
 	<meta charset="UTF-8">
 
 	<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css" integrity="sha384-WskhaSGFgHYWDcbwN70/dfYBj47jz9qbsMId/iRN3ewGhXQFZCSftd1LZCfmhktB" crossorigin="anonymous">
 	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.2.0/css/all.css" integrity="sha384-hWVjflwFxL6sNzntih27bfxkr27PmbbK/iSvJ+a4+0owXq79v+lsFkW54bOGbiDQ" crossorigin="anonymous">
 
-	<link rel='stylesheet' href='/stylesheets/style.css'></link>
+	<link rel='stylesheet' href='stylesheets/style.css'></link>
 </head>
 
-<body>
+<body class="container-fluid mx-0 mx-lg-auto">
 
-<div id='content' class="container">
+<div id='content' class="container-fluid mx-0">
 
-<h1>BeagleBone Music Player</h1>
-<div>by Chris Lee, Eoin Coll, and Eric Liu&nbsp;
-	<button type="button" class="btn" data-toggle="modal" data-target="#settings-modal">
-		<i class="fas fa-cog"></i>
-	</button>
-</div>
-
-<br/>
-
-<div id='add-new-song'>
-	<input type="text" id="new-song-input" placeholder="YouTube link">
-	<input type="button" id="btn-addsong" class="btn btn-primary" value="Add Song"/>
-</div>
-
-<br/>
+<h1>Living Room Music Queue</h1>
 
 <div id='error-box' class="alert alert-danger">
 	<span id='error-text'>No error yet...</span>
 </div>
 
-<div id='song-queue'>
-	<table id="song-list" class="table">
-	  <tr>
-	    <th></th>
-	    <th>TITLE</th>
-	    <th>TIME</th> 
-	    <th>...</th>
-	  </tr>
-		<tr>
-			<td></td>
-		    <td>Nothing in queue!</td>
-		    <td></td>
-		    <td></td>
-		</tr>
-	</table>
+<!--
+    Top Navbar
+-->
+<div class="container-fluid">
+    <ul class="nav nav-pills justify-content-end">
+        <li class="nav-item">
+            <a class="nav-link active" href="index.html">Home</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="addsong.html">Add Song</a>
+        </li>
+    </ul>
+    <hr />
 </div>
 
+<!--
+        Song Queue
+-->
+<div class="container-fluid">
+    <div class="row content-box hidden-box">
+        <div class="col-lg-1 hidden-md-down"></div>
+        <div class="col-12 col-lg-10">
+            <h3>Current Song</h3>
+            <div id="current-song">
+            </div>
+        </div>
+        <div class="col-lg-1 hidden-md-down"></div>
+    </div>
+
+    <div class="row content-box hidden-box">
+        <div class="col-lg-1 hidden-md-down"></div>
+        <div class="col-12 col-lg-10">
+            <h3>Previous Song</h3>
+            <div id="previous-song">
+            </div>
+        </div>
+        <div class="col-lg-1 hidden-md-down"></div>
+    </div>
+
+    <div class="row content-box">
+        <div class="col-lg-1 hidden-md-down"></div>
+        <div class="col-12 col-lg-10">
+            <h3>Song Queue</h3>
+            <table id="song-list" class="table">
+                <tr>
+                    <th></th>
+                    <th>TITLE</th>
+                    <th>LENGTH</th>
+                    <th>OPTIONS</th>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td>The queue is empty!</td>
+                    <td></td>
+                    <td></td>
+                </tr>
+            </table>
+        </div>
+        <div class="col-lg-1 hidden-md-down"></div>
+    </div>
+</div>
+
+<!--
+        Playback Controls
+-->
 <nav id='playback-controls' class="navbar fixed-bottom playback-navbar">
 	<div class="playback-bar-left">
 		<i class="fas fa-volume-up fa-lg" style="color: White;"></i>
@@ -70,64 +104,6 @@
 	</div>
 </nav>
 	
-</div>
-
-
-
-<!-- Modal -->
-<div class="modal fade" id="settings-modal" tabindex="-1" role="dialog" aria-hidden="true">
-  <div class="modal-dialog" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Settings</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-      <div class="modal-body">
-		<form>
-	      <fieldset class="form-group">
-		    <div class="row">
-		      <legend class="col-form-label col-sm-4 pt-0">Device Mode</legend>
-		      <div class="col-sm-8">
-		        <div class="form-check">
-		          <input class="form-check-input" type="radio" name="deviceModeRadios" id="radioModeMaster" value="master" onclick="handleModeChange();" checked>
-		          <label class="form-check-label" for="deviceModeMaster">
-		            Master device
-		          </label>
-		        </div>
-		        <div class="form-check">
-		          <input class="form-check-input" type="radio" name="deviceModeRadios" id="radioModeSlave" value="slave" onclick="handleModeChange();">
-		          <label class="form-check-label" for="deviceModeSlave">
-		            Slave device
-		          </label>
-		        </div>
-		      </div>
-		    </div>
-		  </fieldset>
-
-		    <div id="connectIpFormGroup" class="form-group row">
-		    	<label for="inputMasterIp" class="col-sm-4 col-form-label">Connect to IP address</label>
-		    	<div class="col-sm-8">
-		    		<input type="text" class="form-control" id="inputMasterIp" placeholder="<ip>:<port>">
-		    	</div>
-		    </div>
-
-		    <div id="showIpFormGroup" class="form-group row" style="display:none;">
-		    	<label for="masterIp" class="col-sm-4 col-form-label">Master IP address</label>
-		    	<div class="col-sm-8">
-		    		<input type="text" class="form-control" id="masterIp" value="0.0.0.0:12345" readonly>
-		    		<p class="form-text text-muted">Use this IP address to connect slave devices.</p>
-		    	</div>
-		    </div>
-		</form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-        <button type="button" id="btn-savesettings" class="btn btn-primary">Save changes</button>
-      </div>
-    </div>
-  </div>
 </div>
 
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
