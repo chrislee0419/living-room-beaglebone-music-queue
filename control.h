@@ -8,12 +8,6 @@
 
 #define CONTROL_RMSONG_FIRST    -1
 
-enum control_mode {
-        CONTROL_MODE_UNKNOWN = -1,
-        CONTROL_MODE_MASTER  = 0,
-        CONTROL_MODE_SLAVE   = 1
-};
-
 enum control_song_status {
         CONTROL_SONG_STATUS_UNKNOWN     = -1,
         CONTROL_SONG_STATUS_QUEUED      = 0,
@@ -27,6 +21,7 @@ typedef struct song {
         char filepath[CONTROL_MAXLEN_FN];       // filepath to wav data
         char vid[CONTROL_MAXLEN_VID];           // YouTube video ID
         enum control_song_status status;
+        struct song *prev;                      // Previous song in the queue
         struct song *next;                      // Next song in the queue
 } song_t;
 
@@ -40,17 +35,6 @@ int control_init(void);
  * Cleans up this module
  */
 void control_cleanup(void);
-
-/**
- * Set the music player to be in master mode
- */
-void control_setMode(enum control_mode m);
-
-/**
- * Gets the current mode set for the BBG
- * @return Control mode
- */
-enum control_mode control_getMode(void);
 
 /**
  * Queue audio data to be played
