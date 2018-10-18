@@ -16,29 +16,4 @@ int network_init(void);
  */
 void network_cleanup(void);
 
-/**
- * Send the play song command to the master device
- * @param addr Address of destination
- */
-void network_sendPlayCmd(struct sockaddr_in addr);
-
-/**
- * Send the pause song command to the master device
- * @param addr Address of destination
- */
-void network_sendPauseCmd(struct sockaddr_in addr);
-
-/**
- * Send the skip song command to the master device
- * @param addr Address of destination
- */
-void network_sendSkipCmd(struct sockaddr_in addr);
-
-/**
- * Multicast audio data.
- * @param buf Buffer of data to send
- * @param len Size of buffer
- */
-void network_sendAudio(char *buf, unsigned int len);
-
 #endif

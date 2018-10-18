@@ -8,19 +8,16 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sys/select.h>
 #include <arpa/inet.h>
 #include <time.h>
 #include <pthread.h>
 #include <semaphore.h>
-#include <sched.h>
 #include <errno.h>
 
 #define PRINTF_MODULE           "[network ] "
 
 #define INBOUND_PORT            12345
 #define OUTBOUND_PORT           23456
-#define MCAST_PORT              34567
 #define BUFFER_SIZE             NETWORK_MAX_BUFFER_SIZE
 
 #define CMD_MASTER_OFFSET       12
@@ -43,25 +40,12 @@
 #define CMD_REPEAT_SONG_SSCANF_MATCHES  1
 #define CMD_SET_VOL                     "vol=%d"
 #define CMD_SET_VOL_SSCANF_MATCHES      1
-#define CMD_CHANGE_MODE                 "mode="
-#define CMD_GET_MCAST                   "getmcast"
-#define CMD_MCAST                       "mcast=%u:%hu"
-#define CMD_MCAST_BUF_SIZE              32
-#define CMD_MCAST_SSCANF_MATCHES        2
-
-#define SEND_MCAST_IP                   -1
-#define DEFAULT_MCAST_IP                "224.255.255.255"
-#define MCAST_TIMEOUT_US                1e5
-#define MCAST_RESET_US                  MCAST_TIMEOUT_US * 2
-
-#define MAX_AUDIO_PACKET_SIZE           256
 
 #define VOL_DIFF                        5
 
 static int loop = 0;
 static pthread_t th_rx;
 static pthread_t th_tx;
-static pthread_t th_mcast;
 
 struct out_msg {
         char buf[BUFFER_SIZE];
@@ -73,10 +57,6 @@ struct out_msg {
 static struct out_msg *out_queue = NULL;
 static pthread_mutex_t mtx_queue = PTHREAD_MUTEX_INITIALIZER;
 static sem_t sem_queue;
-
-static struct sockaddr_in mcast_addr;
-static struct timespec mcast_refresh = { .tv_nsec = MCAST_RESET_US };
-static pthread_mutex_t mtx_mcast = PTHREAD_MUTEX_INITIALIZER;
 
 /**
  * Helper functions
@@ -158,11 +138,6 @@ static int queueSystemStatusMessage(struct sockaddr_in sa)
         c = buf;
         s = control_getQueue();
 
-        bytes = sprintf(c, "mode=%d\n", control_getMode());
-        if (!bytes)
-                goto out;
-        c += bytes;
-
         bytes = sprintf(c, "vol=%d\n", audio_getVolume());
         if (!bytes)
                 goto out;
@@ -232,11 +207,9 @@ static int processCmd(char *buf)
 {
         char url[CONTROL_MAXLEN_VID] = {0};
         int num = 0;
-        unsigned int mcast_ip = 0;
-        unsigned short mcast_port = 0;
 
         if (strstr(buf, CMD_PING)) {
-                // do nothing, since a status message is return on valid commands
+                // do nothing, since a status message is returned on valid commands
         } else if (strstr(buf, CMD_VOLUME_UP)) {
                 audio_setVolume(audio_getVolume() + VOL_DIFF);
         } else if (strstr(buf, CMD_VOLUME_DOWN)) {
@@ -255,102 +228,6 @@ static int processCmd(char *buf)
                 control_removeSong(url, num);
         } else if (sscanf(buf, CMD_REPEAT_SONG, &num) == CMD_REPEAT_SONG_SSCANF_MATCHES) {
                 control_setRepeatStatus(num);
-        } else if (strstr(buf, CMD_CHANGE_MODE)) {
-                in_addr_t addr;
-                unsigned short port;
-                char *c;
-
-                if (strstr(buf, "master")) {
-                        buf += CMD_MASTER_OFFSET;
-
-                        // extract designated multicast IP and port if possible
-                        if ((c = strchr(buf, ':'))) {
-                                *c = '\0';
-                                ++c;
-
-                                port = atoi(c);
-
-                                if (!port)
-                                        port = MCAST_PORT;
-                        } else {
-                                // try using MCAST_PORT as default
-                                port = MCAST_PORT;
-                        }
-
-                        addr = inet_addr(buf);
-                        if (addr < 0) {
-                                printf(PRINTF_MODULE "Warning: invalid address provided for multicast\n");
-                                (void)fflush(stdout);
-                                return EADDRNOTAVAIL;
-                        }
-
-                        mcast_addr.sin_port = htons(port);
-                        mcast_addr.sin_addr.s_addr = addr;
-
-                        control_setMode(CONTROL_MODE_MASTER);
-
-                        // lock mcast receiver thread if it isn't already
-                        (void)pthread_mutex_trylock(&mtx_mcast);
-
-                        printf(PRINTF_MODULE "Notice: setting device to master mode\n");
-                        (void)fflush(stdout);
-                } else if (strstr(buf, "slave,")) {
-                        struct sockaddr_in sa;
-
-                        buf += CMD_SLAVE_OFFSET;
-
-                        // extract master IP and port if possible
-                        if ((c = strchr(buf, ':'))) {
-                                *c = '\0';
-                                ++c;
-
-                                port = atoi(c);
-
-                                if (!port)
-                                        port = INBOUND_PORT;
-                        } else {
-                                // try using INBOUND_PORT as default
-                                port = INBOUND_PORT;
-                        }
-
-                        memset(&sa, 0, sizeof(sa));
-                        sa.sin_family = AF_INET;
-                        sa.sin_port = htons(port);
-                        sa.sin_addr.s_addr = inet_addr(buf);
-                        if (sa.sin_addr.s_addr < 0) {
-                                printf(PRINTF_MODULE "Warning: invalid address provided for master device\n");
-                                (void)fflush(stdout);
-                                return EADDRNOTAVAIL;
-                        }
-
-                        // send request to master to obtain the multicast IP
-                        queueOutboundMessage(CMD_GET_MCAST, strlen(CMD_GET_MCAST) + 1, sa);
-
-                        // NOTE: device isn't changed to slave mode here,
-                        // must get multicast IP first
-                }
-        } else if (strstr(buf, CMD_GET_MCAST)) {
-                return SEND_MCAST_IP;
-        } else if (sscanf(buf, CMD_MCAST, &mcast_ip, &mcast_port) == CMD_MCAST_SSCANF_MATCHES) {
-                // extract multicast group IP
-                mcast_addr.sin_addr.s_addr = mcast_ip;
-                mcast_addr.sin_port = mcast_port;
-
-                // if it was already in slave mode, we need to reset the socket
-                // to listen for the new address
-                if (control_getMode() == CONTROL_MODE_SLAVE) {
-                        // temporarily set to master to reset the multicast loop
-                        control_setMode(CONTROL_MODE_MASTER);
-                        nanosleep(&mcast_refresh, NULL);
-                }
-
-                control_setMode(CONTROL_MODE_SLAVE);
-
-                // unlock multicast receiver thread
-                pthread_mutex_unlock(&mtx_mcast);
-
-                printf(PRINTF_MODULE "Notice: setting device to slave mode\n");
-                (void)fflush(stdout);
         } else {
                 printf(PRINTF_MODULE "Warning: invalid command received (\"%s\")\n", buf);
                 (void)fflush(stdout);
@@ -387,26 +264,9 @@ static void processMessage(char *buf, struct sockaddr_in sa)
         }
 
         // error handling
-        if (err == SEND_MCAST_IP) {
-                // not actually an error, but we don't need to send the
-                // system status message, so we can treat it like one
-                char out_buf[CMD_MCAST_BUF_SIZE] = {0};
-
-                sprintf(out_buf, CMD_MCAST,
-                        mcast_addr.sin_addr.s_addr,
-                        mcast_addr.sin_port);
-
-                // send the broadcast IP of this device back to the slave
-                queueOutboundMessage(out_buf, strlen(out_buf) + 1, sa);
-        } else if (err == EADDRNOTAVAIL) {
-                queueOutboundMessage("error=\"invalid address provided\"\n",
-                        strlen("error=\"invalid address provided\"\n") + 1, sa);
-        } else if (err == EINVAL) {
+        if (err == EINVAL) {
                 queueOutboundMessage("error=\"invalid command\"\n",
                         strlen("error=\"invalid command\"\n") + 1, sa);
-        } else if (err == ENOMEM) {
-                // don't send anything, otherwise the slave and master will keep
-                // sending error messages back and forth between each other
         } else {
                 (void)queueSystemStatusMessage(sa);
         }
@@ -476,130 +336,21 @@ static void *senderLoop(void *arg)
         return NULL;
 }
 
-static void *mcastReceiverLoop(void *arg)
-{
-        int fd = 0;
-        struct ip_mreq mreq;
-        fd_set rfds;
-        struct timeval timeout;
-        struct sockaddr_in sa;
-        char buf[BUFFER_SIZE] = {0};
-        int bytes_recv;
-        unsigned int sa_len;
-        int ret;
-
-        while (loop) {
-                // lock this thread when we are not using it
-                pthread_mutex_lock(&mtx_mcast);
-                pthread_mutex_unlock(&mtx_mcast);
-
-                if (getSocketFD(ntohs(mcast_addr.sin_port), &fd)) {
-                        printf(PRINTF_MODULE "Error: unable to get socket file descriptor for multicast\n");
-                        (void)fflush(stdout);
-                        goto out;
-                }
-
-                mreq.imr_multiaddr.s_addr = mcast_addr.sin_addr.s_addr;
-                mreq.imr_interface.s_addr = htonl(INADDR_ANY);
-
-                if (setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
-                        printf(PRINTF_MODULE "Error: unable to join multicast group (%s)\n", strerror(errno));
-                        (void)fflush(stdout);
-                        goto out;
-                }
-
-                printf(PRINTF_MODULE "Notice: starting multicast receiver thread at %u:%hu\n",
-                        ntohl(mcast_addr.sin_addr.s_addr), ntohs(mcast_addr.sin_port));
-                (void)fflush(stdout);
-
-                while (control_getMode() == CONTROL_MODE_SLAVE) {
-                        // prepare timeout and file descriptor list
-                        FD_ZERO(&rfds);
-                        FD_SET(fd, &rfds);
-
-                        timeout.tv_sec = 0;
-                        timeout.tv_usec = MCAST_TIMEOUT_US;
-
-                        // check if we can read from the socket
-                        ret = select(fd + 1, &rfds, NULL, NULL, &timeout);
-
-                        if (ret < 0) {
-                                printf(PRINTF_MODULE "Warning: an error has occurred in select(), restarting multicast receiver\n");
-                                (void)fflush(stdout);
-                                goto out;
-                        } else if (ret == 0) {
-                                // timeout expired, continue
-                                continue;
-                        } else {
-                                // data can be read from socket
-                                sa_len = sizeof(sa);
-
-                                // NOTE: this thread can get stuck here if nothing is being multicasted
-                                bytes_recv = recvfrom(fd, buf, BUFFER_SIZE-1, 0,
-                                        (struct sockaddr *)&sa, &sa_len);
-
-                                if (bytes_recv < 0) {
-                                        printf(PRINTF_MODULE "Error: mcastReceiverLoop's recvfrom encountered an error\n");
-                                        (void)fflush(stdout);
-                                        goto out;
-                                }
-
-                                // send audio to control loop
-                                control_queueAudio(buf, bytes_recv);
-
-                                (void)memset(buf, 0, BUFFER_SIZE);
-                        }
-                }
-out:
-                (void)setsockopt(fd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq));
-
-                if (fd > 0) {
-                        close(fd);
-                        fd = 0;
-                }
-
-        }
-
-        return NULL;
-}
-
 /**
  * Public functions
  */
 int network_init(void)
 {
         int err = 0;
-        struct sched_param params;
 
         loop = 1;
 
         (void)sem_init(&sem_queue, 0, 0);
 
-        // set up multicast sockaddr_in objects
-        memset(&mcast_addr, 0, sizeof(mcast_addr));
-        mcast_addr.sin_family = AF_INET;
-        mcast_addr.sin_port = htons(MCAST_PORT);
-        mcast_addr.sin_addr.s_addr = inet_addr(DEFAULT_MCAST_IP);
-
-        pthread_mutex_lock(&mtx_mcast);
-
-        if ((err = pthread_create(&th_rx, NULL, receiverLoop, NULL))) {
+        if ((err = pthread_create(&th_rx, NULL, receiverLoop, NULL)))
                 printf(PRINTF_MODULE "Error: unable to create thread for incoming UDP connections\n");
-                return err;
-        } else if ((err = pthread_create(&th_tx, NULL, senderLoop, NULL))) {
+        else if ((err = pthread_create(&th_tx, NULL, senderLoop, NULL)))
                 printf(PRINTF_MODULE "Error: unable to create thread for outgoing UDP connections\n");
-                return err;
-        } else if ((err = pthread_create(&th_mcast, NULL, mcastReceiverLoop, NULL))) {
-                printf(PRINTF_MODULE "Error: unable to create thread for receiving multicasts\n");
-                return err;
-        }
-
-        // set higher scheduling priority for multicast receiver thread
-        params.sched_priority = sched_get_priority_max(SCHED_FIFO);
-
-        err = pthread_setschedparam(th_mcast, SCHED_FIFO, &params);
-        if (err)
-                printf(PRINTF_MODULE "Error: unable to schedule a higher priority for multicast receiver thread\n");
 
         return err;
 }
@@ -620,34 +371,4 @@ void network_cleanup(void)
 
         (void)pthread_join(th_rx, NULL);
         (void)pthread_join(th_tx, NULL);
-}
-
-void network_sendPlayCmd(struct sockaddr_in addr)
-{
-        queueOutboundMessage(CMD_PLAY "\n", strlen(CMD_PLAY "\n")+1, addr);
-}
-
-void network_sendPauseCmd(struct sockaddr_in addr)
-{
-        queueOutboundMessage(CMD_PAUSE "\n", strlen(CMD_PAUSE "\n")+1, addr);
-}
-
-void network_sendSkipCmd(struct sockaddr_in addr)
-{
-        queueOutboundMessage(CMD_SKIP "\n", strlen(CMD_SKIP "\n")+1, addr);
-}
-
-void network_sendAudio(char *buf, unsigned int len)
-{
-        unsigned int size;
-
-        // break up bufer into smaller chunks if too large
-        while (len > 0) {
-                size = len > MAX_AUDIO_PACKET_SIZE ? MAX_AUDIO_PACKET_SIZE : len;
-
-                queueOutboundMessage(buf, size, mcast_addr);
-
-                len -= size;
-                buf += size;
-        }
 }
