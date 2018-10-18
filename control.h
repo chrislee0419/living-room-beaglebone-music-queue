@@ -3,10 +3,11 @@
 
 #include <netinet/in.h>
 
-#define CONTROL_MAXLEN_FN       256
-#define CONTROL_MAXLEN_VID      16
+#define CONTROL_MAXLEN_FN               256
+#define CONTROL_MAXLEN_VID              16
 
-#define CONTROL_RMSONG_FIRST    -1
+#define CONTROL_RMSONG_FIRST            -1
+#define CONTROL_PREV_SONGS_LIST_LEN     2
 
 enum control_song_status {
         CONTROL_SONG_STATUS_UNKNOWN     = -1,
@@ -35,13 +36,6 @@ int control_init(void);
  * Cleans up this module
  */
 void control_cleanup(void);
-
-/**
- * Queue audio data to be played
- * @param buf Buffer containing audio data
- * @param length Length of buffer
- */
-void control_queueAudio(char *buf, unsigned int length);
 
 /**
  * Resume playing audio
@@ -110,6 +104,13 @@ void control_getSongProgress(int *curr, int *end);
  * @return Linked list of song_t objects
  */
 const song_t *control_getQueue(void);
+
+/**
+ * Get the previous CONTROL_PREV_SONGS_LIST_LEN songs played
+ * First song is the most recently played song
+ * @return Linked list of song_t objects
+ */
+const song_t *control_getPlayedSongs(void);
 
 /**
  * Callback when a download completes

@@ -19,24 +19,14 @@
 #define DATA_OFFSET_INTO_WAVE   44
 #define SAMPLE_SIZE             (sizeof(short))
 
-#define SLAVE_BUF_SIZE          30000
-#define SLAVE_AUDIO_WAIT_US     1e4
-#define SLAVE_PLAY_DELAY_US     1
-
 #define NUM_SONGS_TO_DOWNLOAD 3
 
-#ifdef MP_DESKTOP
-static const char *CACHE_DIR = "/home/chris/cache/";
-#else
 static const char* CACHE_DIR = "/root/cache/";
-#endif
 static const char* WAV_EXT = ".wav";
-
-static enum control_mode mode = CONTROL_MODE_MASTER;
 
 static song_t *song_queue = NULL;
 
-static short *au_buf = NULL;            // ring buffer when in slave mode, otherwise entire music file
+static short *au_buf = NULL;            // entire music file
 static int au_buf_start = 0;            // represents current index of audio data
 static int au_buf_end = 0;              // represents index after valid audio data
 
@@ -50,8 +40,6 @@ static pthread_t th_aud;
 static pthread_t th_ping;
 static pthread_mutex_t mtx_audio = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mtx_queue = PTHREAD_MUTEX_INITIALIZER;
-
-static struct timespec slave_wait = { .tv_nsec = SLAVE_AUDIO_WAIT_US };
 
 /*
  * Helper functions
@@ -86,8 +74,7 @@ static void debugPrintSong(song_t* song) {
 
         if (song == NULL) {
                 printf("NULL song\n");
-        }
-        else {
+        } else {
                 char statusStr[10];
                 switch (song->status) {
                         case CONTROL_SONG_STATUS_UNKNOWN:
@@ -122,7 +109,6 @@ static void debugPrintSongList(void)
         }
 }
 
-#ifndef MP_DESKTOP
 static int getSongQueueLength(void)
 {
         int length = 0;
@@ -138,7 +124,6 @@ static int getSongQueueLength(void)
 
         return length;
 }
-#endif
 
 void control_deleteAndFreeSong(song_t* song) {
 
@@ -242,9 +227,7 @@ static int loadNewSong(void)
                 song_t* song_prev = song_queue;
                 pthread_mutex_unlock(&mtx_queue);
                 control_deleteAndFreeSong(song_prev);
-#ifndef MP_DESKTOP
                 disp_setNumber(getSongQueueLength());
-#endif
                 pthread_mutex_lock(&mtx_queue);
         }
 
@@ -333,9 +316,7 @@ static void *audioLoop(void *arg)
         short *buf;
 
         // prepare thread to be locked when first initialized (not playing)
-        // only applies to master, slave should always play
-        if (mode == CONTROL_MODE_MASTER)
-                pthread_mutex_lock(&mtx_play);
+        pthread_mutex_lock(&mtx_play);
 
         while (loop) {
                 // sleep thread if not in playing status
@@ -347,18 +328,7 @@ static void *audioLoop(void *arg)
                 // take new song from the top of the queue if:
                 // - au_buf (audio data from file) is NULL
                 // - end of the current song is reached
-                if (!au_buf ||
-                    (mode == CONTROL_MODE_MASTER && au_buf_end-1 <= au_buf_start) ||
-                    au_buf_end-1 == au_buf_start) {
-                        // busy waiting during slave mode
-                        // audio data can come from master at any time
-                        if (mode == CONTROL_MODE_SLAVE) {
-                                audio_stopAudio();
-                                pthread_mutex_unlock(&mtx_audio);
-                                nanosleep(&slave_wait, NULL);
-                                continue;
-                        }
-
+                if (!au_buf || au_buf_end-1 <= au_buf_start) {
                         // repeat song if set
                         if (au_buf && repeat_status && song_queue) {
                                 au_buf_start = 0;
@@ -380,22 +350,6 @@ static void *audioLoop(void *arg)
                         continue;
                 }
 
-                // handle circular buffer for slave
-                if (mode == CONTROL_MODE_SLAVE && au_buf_start > au_buf_end) {
-                        buf = au_buf + au_buf_start;
-                        num_played = audio_playAudio(buf, SLAVE_BUF_SIZE - au_buf_start);
-
-                        if (num_played > 0)
-                                au_buf_start = (au_buf_start + num_played) % SLAVE_BUF_SIZE;
-
-                        pthread_mutex_unlock(&mtx_audio);
-                        continue;
-                } else if (mode == CONTROL_MODE_UNKNOWN) {
-                        pthread_mutex_unlock(&mtx_audio);
-                        control_pauseAudio();
-                        continue;
-                }
-
                 buf = au_buf + au_buf_start;
                 num_played = audio_playAudio(buf, au_buf_end - au_buf_start);
 
@@ -403,10 +357,6 @@ static void *audioLoop(void *arg)
                         pthread_mutex_unlock(&mtx_audio);
                         continue;
                 }
-
-                // send audio to slave devices
-                if (mode == CONTROL_MODE_MASTER)
-                        network_sendAudio((char *)buf, num_played * sizeof(short) / sizeof(char));
 
                 au_buf_start += num_played;
 
@@ -486,33 +436,29 @@ int control_getPlayStatus(void)
 
 void control_skipSong(void)
 {
-        if (mode == CONTROL_MODE_MASTER) {
-                int was_playing = 0;
+        int was_playing = 0;
 
-                if (play_status) {
-                        control_pauseAudio();
-                        was_playing = 1;
-                }
+        if (play_status) {
+                control_pauseAudio();
+                was_playing = 1;
+        }
 
-                // TODO: Handle skipping when song is still loading
-                // TODO: Reset audio to 0
-                control_deleteAndFreeSong(song_queue);
-#ifndef MP_DESKTOP
-                disp_setNumber(getSongQueueLength());
-#endif
+        // TODO: Handle skipping when song is still loading
+        // TODO: Reset audio to 0
+        control_deleteAndFreeSong(song_queue);
+        disp_setNumber(getSongQueueLength());
 
-                // Delete the current buf, so we're forced to load a new one
-                pthread_mutex_lock(&mtx_audio);
-                if (au_buf)
-                        free(au_buf);
-                        au_buf = NULL;
-                au_buf_start = 0;
-                pthread_mutex_unlock(&mtx_audio);
+        // Delete the current buf, so we're forced to load a new one
+        pthread_mutex_lock(&mtx_audio);
+        if (au_buf)
+                free(au_buf);
+                au_buf = NULL;
+        au_buf_start = 0;
+        pthread_mutex_unlock(&mtx_audio);
 
-                // resume audio if it was playing before
-                if (was_playing) {
-                        control_playAudio();
-                }
+        // resume audio if it was playing before
+        if (was_playing) {
+                control_playAudio();
         }
 }
 
@@ -558,9 +504,8 @@ void control_addSong(char *url)
         // Download songs if needed
         updateDownloadedSongs();
 
-#ifndef MP_DESKTOP
+        // Show the number of songs in the queue on the display
         disp_setNumber(getSongQueueLength());
-#endif
 
         debugPrintSongList();
 }
@@ -581,9 +526,7 @@ int control_removeSong(char *url, int index)
         // Download new songs if needed
         updateDownloadedSongs();
 
-#ifndef MP_DESKTOP
         disp_setNumber(getSongQueueLength());
-#endif
 
         return 0;
 }
