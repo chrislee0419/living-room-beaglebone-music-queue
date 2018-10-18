@@ -6,26 +6,32 @@
 
 "use strict";
 
-const POLL_INTERVAL_MS = 1000;
+const POLL_INTERVAL_MS = 500;
 const UPDATE_TIMEOUT = 5000;
 const ERROR_DISPLAY_TIME = 2000;
 
 var socket = io.connect();
 
-var lastUpdateTimeNodejs = Date.now();
+var serverResponded = true;
+var lastResponseTime = Date.now();
+
+var apiKey = "AIzaSyAZkC1t4CApwcbyk-JOTVxe5QQVHfblw9g";
 
 // Run when webpage fully loaded
 $(document).ready(function() {
 
 	// Register callback functions for each button
+    // index.html
 	$("#new-song-input").keyup(function(event) {
 	    if (event.keyCode === 13) {
-	        $("#btn-addsong").click();
+            $("#btn-addsong").click();
 	    }
 	});
 
-	$('#btn-addsong').click(function() { submitSongLink(); });
+    // addsong.html
+	$('#btn-searchsong').click(function() { submitSongSearch(); });
 
+    // playback buttons
 	$('#btn-repeat').click(	function() { sendRepeatSong(); });
 	$('#btn-playpause').click(	function() { sendPlayPause(); });
 	$('#btn-skipsong').click(	function() { sendSkipSong(); });
@@ -42,9 +48,22 @@ $(document).ready(function() {
 
 	// Poll server for new data
 	pollServer();
-
-	handleModeChange();
 });
+
+
+//
+// Error display
+//========================================================================
+
+var errorTimeout;
+
+function setError(errorMsg) {
+	$("#error-text").html(errorMsg);
+	$('#error-box').show();
+
+	clearTimeout(errorTimeout);
+	errorTimeout = window.setTimeout(function() { $('#error-box').hide(); }, ERROR_DISPLAY_TIME);
+}
 
 
 //
@@ -60,43 +79,132 @@ const CMD_SKIP        = "skip";
 const CMD_ADD_SONG    = "addsong=";
 const CMD_REMOVE_SONG = "rmsong=";
 const CMD_REPEAT_SONG = "repeat=";
-const CMD_CHANGE_MODE = "mode=";
 
 function sendServerCommand(data) {
 	socket.emit('clientCommand', data + '\n');
 };
+
+function pollServer() {
+    if (serverResponded) {
+        socket.emit('clientCommand', 'statusping\n');
+        window.setTimeout(pollServer, POLL_INTERVAL_MS);
+        serverResponded = false;
+    } else if ((Date.now() - lastResponseTime) > UPDATE_TIMEOUT) {
+        setError("No response from the server. Is it running?");
+    }
+}
+
+
+//
+// Searching for songs
+//========================================================================
+
+const SEARCH_MAX_RESULTS = 10;
+
+function addSearchedSong(videoId) {
+}
+
+// Searches for YouTube videos that match the user's query
+function querySongs() {
+    var searchQuery = $('#tb-song-search').val();
+
+    // Test if search query contains at least one alphanumeric character
+    if (!/[a-zA-Z0-9]/.test(searchQuery)) {
+        return;
+    }
+
+    // Build the query
+    var query = "?q=" + encodeURIComponent(searchQuery);
+    query += "&key=" + apiKey;
+    query += "&maxResults=" + SEARCH_MAX_RESULTS;
+    query += "&type=video";
+    query += "&part=snippet";
+
+    // Send a search request to Google/YouTube
+	$.get("https://www.googleapis.com/youtube/v3/search" + query,
+        function(search_data) {
+            if (search_data.items.length == 0) {
+                $('#search-results-title').val("Search Results: \"" + query + "\"");
+                $('#search-results-list').val("<h4>No results</h4>");
+                return;
+            }
+
+            // Send another request to get the duration of each video
+            var ids = [];
+
+            for (let item of search_data.items) {
+                ids.push(item.id.videoId);
+            }
+
+            $.get("https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=" + ids.join() + "&key=" + apiKey,
+                function(details_data) {
+                    // Reset the title and search result contents
+                    $('#search-results-title').html("Search results for \"" + searchQuery + "\"");
+                    $('#search-results-list').html("");
+
+                    // Set HTML for search results
+                    for (let item of search_data.items) {
+                        // Find the duration of this video
+                        var duration = "Unknown length";
+                        for (var j = 0; j < details_data.items.length; j++) {
+                            if (details_data.items[j].id === item.id.videoId) {
+                                duration = parseSecsToString(parseDuration(details_data.items[j].contentDetails.duration));
+                            }
+                        }
+
+                        var html = `<div class="row search-results-item">
+<div class="col-6 col-md-3 thumbnail-container">
+<img class="thumbnail" src="` + item.snippet.thumbnails.default.url + `">
+</div>
+<div class="col-6 col-md-6">
+<h4><a href="https://www.youtube.com/watch?v=` + item.id.videoId + `" target="_blank">` + item.snippet.title + `</a></h4>
+<p><i class="fas fa-address-card"></i> ` + item.snippet.channelTitle + `</p>
+<p><i class="fas fa-stopwatch"></i> ` + duration + ` </p>
+</div>
+<div class="col-12 col-md-3 button-container">
+<button id="btn-` + item.id.videoId + `" class="search-results-item-button btn btn-outline-primary" type="button">
+<i class="fas fa-plus-circle"></i> Add to queue
+</button>
+</div>
+</div>`;
+
+                        $('#search-results-list').append(html);
+
+                        // Add a click callback for the add to queue button
+                        $('#btn-' + item.id.videoId).click(function () { addSong(item.id.videoId); });
+                    }
+
+                    // Show results list div if it isn't already displayed
+                    $('#search-results-box').show();
+            });
+    });
+}
 
 
 //
 // Song Queue
 //========================================================================
 
-// This 
 var songQueue = [];
 
 // Submits input link to server
-function submitSongLink() {
+function submitSongSearch() {
 	// Get form input
-	var songUrl = $('#new-song-input').val();
+	var songUrl = $('#tb-song-search').val();
 
-	// Clear form input
-	$('#new-song-input').val("");
-
+    // First, check if it is a valid YouTube link
 	var videoId = youtube_parser(songUrl);
-	if (!videoId) {
-		// TODO: Show error invalid link
-		setError("Cannot add invalid YouTube link!")
-		return;
-	}
+    if (videoId) {
+        sendServerCommand(CMD_ADD_SONG + videoId);
+        return;
+    }
 
-	// Send to server
-	sendServerCommand(CMD_ADD_SONG + videoId);
+    // If it isn't a valid YouTube link, perform a search
+    querySongs();
 }
 
-var apiKey = "AIzaSyAZkC1t4CApwcbyk-JOTVxe5QQVHfblw9g";
-
 // Adds a song to end of the list
-function addSong(videoId) {
+function addSong(videoId, index) {
 	// Check Youtube link
 	$.get("https://www.googleapis.com/youtube/v3/videos?id=" + videoId + "&key=" + apiKey + "&part=snippet,contentDetails", 
 		function(data) {
@@ -111,9 +219,20 @@ function addSong(videoId) {
 				"id": videoId,
 				"title": videoTitle,
 				"duration": durationSeconds,
+                "index": index,
 			};
 
-			songQueue.push(songItem);
+            // Insert the song details in the correct place in the queue
+            if (songQueue.length > 0) {
+                for (var i = 0; i < songQueue.length; i++) {
+                    if (songQueue[i].index > songItem.index) {
+                        songQueue.splice(i, 0, songItem);
+                        break;
+                    }
+                }
+            } else {
+			    songQueue.push(songItem);
+            }
 
 			refreshSongTableHtml();	
 	});
@@ -210,7 +329,7 @@ function deferRefreshSongTableHtml(num) {
 function youtube_parser(url){
     var regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#\&\?]*).*/;
     var match = url.match(regExp);
-    return (match&&match[7].length==11)? match[7] : false;
+    return (match&&match[7].length==11) ? match[7] : false;
 }
 
 var prevQueueData = "undefined";
@@ -234,7 +353,7 @@ function handleSongQueueData(data, appendData=false) {
 
 	for (videoId of videoIds) {
 		if (videoId.length > 2) {
-			addSong(videoId);
+			addSong(videoId, numValidVids);
 			numValidVids++;
 		}
 	}
@@ -354,15 +473,6 @@ function setDisplayVolume(newVolume) {
 }
 
 
-function pollServer() {
-	socket.emit('clientCommand', 'statusping\n');
-	window.setTimeout(pollServer, POLL_INTERVAL_MS);
-
-	if ((Date.now() - lastUpdateTimeNodejs) > UPDATE_TIMEOUT) {
-		// setError("No response from Node.js server. Is it running?")
-	}
-}
-
 //
 // Song time progress
 //========================================================================
@@ -428,89 +538,34 @@ function setSongProgress(progressInput) {
 
 
 //
-// Master/slave device connection settings
-//========================================================================
-
-const DEVICE_MODE_MASTER = 0;
-const DEVICE_MODE_SLAVE = 1;
-
-var deviceMode = DEVICE_MODE_MASTER;
-
-function getServerMode() {
-	sendServerCommand(CMD_GET_MODE);
-}
-
-function setDeviceMode(newMode) {
-    // This should update a string instead,
-    // otherwise the radio buttons keep switching
-    // also, mode is returned with a 0 or a 1, referring to the enums
-    // in the control module header file
-
-	if (isModalVisible('#settings-modal')) {
-		return;
-	}
-
-	deviceMode = newMode;
-	if (deviceMode == DEVICE_MODE_MASTER) {
-		$('#radioModeMaster').prop("checked", true);
-		$('#radioModeSlave').prop("checked", false);
-	}
-	else {
-		$('#radioModeMaster').prop("checked", false);
-		$('#radioModeSlave').prop("checked", true);
-	}
-
-	handleModeChange();
-}
-
-// Displays the corresponding IP address (master) or IP input field (slave)
-function handleModeChange() {
-	if($('#radioModeMaster').is(':checked')) {
-		deviceMode = DEVICE_MODE_MASTER;
-		$('#connectIpFormGroup').hide();
-		$('#showIpFormGroup').show();
-	}
-	else {
-		deviceMode = DEVICE_MODE_SLAVE;
-		$('#connectIpFormGroup').show();
-		$('#showIpFormGroup').hide();
-	}
-}
-
-function saveSettings() {
-	if (deviceMode == DEVICE_MODE_MASTER) {
-		sendServerCommand(CMD_CHANGE_MODE + deviceMode);
-	}
-	else {
-		var addressInput = $('#inputMasterIp').val();
-		sendServerCommand(CMD_CHANGE_MODE + deviceMode + ',' + addressInput);
-	}
-}
-
-function isModalVisible(modalId) {
-	return $(modalId).hasClass('show');
-}
-
-//
 // Handling server commands
 //========================================================================
 
-const COMMANDS_DELIM = /[;\n]/;
-const COMMAND_DELIM = /[ =]/;
+const CMD_RESPONSE_PLAY      = "play";
+const CMD_RESPONSE_VOL       = "vol";
+const CMD_RESPONSE_REPEAT    = "repeat";
+const CMD_RESPONSE_STATUS    = "status";
+const CMD_RESPONSE_PROGRESS  = "progress";
+const CMD_RESPONSE_QUEUE     = "queue";
+const CMD_RESPONSE_QUEUE_EXT = "queuemore";
 
-// Handles multiple commands seperated by COMMAND_DELIM
+const RESPONSE_CMDS_DELIM = /[;\n]/;
+const RESPONSE_CMD_DELIM = /[ =]/;
+
+// Handles multiple commands seperated by RESPONSE_CMDS_DELIM
 function handleServerCommands(data) {
-	var commands = data.split(COMMANDS_DELIM);
+	var commands = data.split(RESPONSE_CMDS_DELIM);
 	for (var i in commands) {
 		handleServerCommand(commands[i]);
 	}
 
-	lastUpdateTimeNodejs = Date.now();
+	lastResponseTime = Date.now();
+    serverResponded = true;
 }
 
 // Handles single command
 function handleServerCommand(command) {
-	var parsedWords = command.split(COMMAND_DELIM);
+	var parsedWords = command.split(RESPONSE_CMD_DELIM);
 	if (parsedWords.length == 0) {
 		return;
 	}
@@ -519,47 +574,34 @@ function handleServerCommand(command) {
 	var subCommand = parsedWords[1];
 
 	switch (primaryCommand) {
-		case "play":
+		case CMD_RESPONSE_PLAY:
 			setPlayPauseDisplay(subCommand == '1');
 			break;
 
-		case "vol":
+		case CMD_RESPONSE_VOL:
 			setDisplayVolume(subCommand);
 			break;
 
-		case "repeat":
+		case CMD_RESPONSE_REPEAT:
 			break;
 
-		case "status":
+		case CMD_RESPONSE_STATUS:
 			handleSongStatus(subCommand)
 			break;
 
-		case "progress":
+		case CMD_RESPONSE_PROGRESS:
 			setSongProgress(subCommand);
 			break;
 
-		case "mode":
-			setDeviceMode(subCommand);
-			break;
-
-		case "queue":
+		case CMD_RESPONSE_QUEUE:
 			handleSongQueueData(subCommand);
 			break;
 
-		case "queuemore":
+		case CMD_RESPONSE_QUEUE_EXT:
 			handleSongQueueData(subCommand, true);
 			break;
 
 		default:
 			console.log("Error: Unrecognized command %s", primaryCommand);
 	}
-}
-
-var errorTimeout;
-function setError(errorMsg) {
-	$("#error-text").html(errorMsg);
-	$('#error-box').show();
-
-	clearTimeout(errorTimeout);
-	errorTimeout = window.setTimeout(function() { $('#error-box').hide(); }, ERROR_DISPLAY_TIME);
 }
