@@ -339,11 +339,13 @@ function volumeClick() {
         	'<div class="volume-popup">' +
 			'<input id="vol-control" type="range" min="0" max="100" step="1" oninput="sendVolumeValue(this.value)" onchange="sendVolumeValue(this.value)" style="position:absolute;right:40px;">' +
 			'</div>');
+        $('.playback-bar-left').hide();
 
 
     }
     else {
         $('.volume-popup').remove();
+        $('.playback-bar-left').show();
 
     }
 }
