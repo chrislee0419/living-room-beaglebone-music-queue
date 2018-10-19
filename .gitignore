@@ -3,6 +3,9 @@
 .project
 /.settings
 
+# JetBrains files
+/.idea
+
 # Prerequisites
 *.d
 
