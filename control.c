@@ -22,9 +22,10 @@
 #define NUM_SONGS_TO_DOWNLOAD 3
 
 static const char* CACHE_DIR = "/root/cache/";
-static const char* WAV_EXT = ".wav";
+static const char* MP3_EXT = ".mp3";
 
 static song_t *song_queue = NULL;
+static song_t *prev_songs[CONTROL_PREV_SONGS_LIST_LEN] = {0};
 
 static short *au_buf = NULL;            // entire music file
 static int au_buf_start = 0;            // represents current index of audio data
@@ -481,7 +482,7 @@ void control_addSong(char *url)
         // Update song with .wav filepath
         strcpy(new_song->filepath, CACHE_DIR);
         strcat(new_song->filepath, new_song->vid);
-        strcat(new_song->filepath, WAV_EXT);
+        strcat(new_song->filepath, MP3_EXT);
 
         new_song->next = NULL;
         new_song->status = CONTROL_SONG_STATUS_QUEUED;
