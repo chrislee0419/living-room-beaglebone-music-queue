@@ -86,14 +86,18 @@
         Playback Controls
 -->
 <nav id='playback-controls' class="navbar fixed-bottom playback-navbar">
-	<div class="playback-bar-left">
-		<i class="fas fa-volume-up fa-lg" style="color: White;"></i>
-		&nbsp;
-		<!-- <input type="button" id="btn-vol-down" value="-"/> -->
-		<input id="vol-control" type="range" min="0" max="100" step="1" oninput="sendVolumeValue(this.value)" onchange="sendVolumeValue(this.value)" style="position:relative;top:4px;"></input>
-		<!-- <input type="button" id="btn-vol-up" value="+"/> -->
+	<div class="volume-icon">
+		<i id="btn-volume" class="fas fa-volume-up fa-lg" style="color: White;"></i>
 		<span id="volume-display-val">80</span>
+		<div class="playback-bar-left">
+			<!-- <input type="button" id="btn-vol-down" value="-"/> -->
+			<input id="vol-control" type="range" min="0" max="100" step="1" oninput="sendVolumeValue(this.value)" onchange="sendVolumeValue(this.value)" style="position:relative;top:4px;">
+			<!-- <input type="button" id="btn-vol-up" value="+"/> -->
+
+		</div>
+
 	</div>
+
 	<div class="playback-bar-center">
 		<span class="playback-button"><i id="btn-repeat" title="Repeat song" class="fas fa-redo playback-icon" style="position:relative;top:-16px;"></i></span>
 		<span class="playback-button"><i id="btn-playpause" class="fas fa-play-circle fa-4x playback-icon"></i></span>

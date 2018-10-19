@@ -121,9 +121,21 @@ p {
 	background-color: #3f51b5;
 	min-height: 90px;
 }
+.volume-popup {
+	transform: rotate(90deg);
 
+}
 .playback-bar-center {
-	min-width: 150px;
+	margin-right: 90px
+}
+.playback-bar-left {
+	display:inline-block;
+}
+
+@media (max-width: 40em) {
+	.playback-bar-left {
+		display: none !important;
+	}
 }
 
 .playback-button {
@@ -143,4 +155,9 @@ p {
 #song-progress-time {
 	margin: 10px;
 	color: white;
+}
+#song-progress-time {
+	margin: 10px;
+	color: white;
+	font-size: 20px;
 }
