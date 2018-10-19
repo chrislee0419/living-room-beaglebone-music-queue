@@ -172,7 +172,11 @@ function querySongs() {
                         $('#search-results-list').append(html);
 
                         // Add a click callback for the add to queue button
-                        $('#btn-' + item.id.videoId).click(function () { addSong(item.id.videoId); });
+                        $('#btn-' + item.id.videoId).click(
+                            function () {
+                                sendServerCommand(CMD_ADD_SONG + item.id.videoId);
+                                window.location.href = "index.html";
+                        });
                     }
 
                     // Show results list div if it isn't already displayed
@@ -197,6 +201,7 @@ function submitSongSearch() {
 	var videoId = youtube_parser(songUrl);
     if (videoId) {
         sendServerCommand(CMD_ADD_SONG + videoId);
+        window.location.href = "index.html";
         return;
     }
 
