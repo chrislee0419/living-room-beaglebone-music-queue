@@ -25,7 +25,7 @@ $(document).ready(function() {
 	});
 
 	$('#btn-addsong').click(function() { submitSongLink(); });
-
+    $('#btn-volume').click(	function() { volumeClick(); });
 	$('#btn-repeat').click(	function() { sendRepeatSong(); });
 	$('#btn-playpause').click(	function() { sendPlayPause(); });
 	$('#btn-skipsong').click(	function() { sendSkipSong(); });
@@ -302,7 +302,7 @@ function sendPlayPause() {
 function setPlayPauseDisplay(isPlayingInput) {
 	isPlaying = isPlayingInput;
 	
-	// Change play/puase button display
+	// Change play/pause button display
 	if (isPlaying) {
 		$("#btn-playpause").attr("class", "fas fa-pause-circle fa-4x playback-icon");
 	}
@@ -329,6 +329,23 @@ function sendRepeatSong() {
 		sendServerCommand(CMD_REPEAT_SONG + '0');
 		$("#btn-repeat").addClass("playback-icon").removeClass("playback-icon-selected");
 	}
+}
+var volumePressed = false;
+function volumeClick() {
+    volumePressed = !volumePressed;
+
+    if(volumePressed) {
+        $("#btn-volume").append(
+        	'<div class="volume-popup">' +
+			'<input id="vol-control" type="range" min="0" max="100" step="1" oninput="sendVolumeValue(this.value)" onchange="sendVolumeValue(this.value)" style="position:absolute;right:40px;">' +
+			'</div>');
+
+
+    }
+    else {
+        $('.volume-popup').remove();
+
+    }
 }
 
 
