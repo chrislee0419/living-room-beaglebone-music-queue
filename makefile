@@ -1,12 +1,11 @@
 OUTFILE = musicPlayer
 OUTDIR = $(HOME)/cmpt433/public/myApps
-DESKTOPOUTFILE = $(OUTFILE)-desktop
 
 CC = gcc
 CC_C = arm-linux-gnueabihf-gcc
 CFLAGS = -Wall -g -std=c99 -D _POSIX_C_SOURCE=200809L -D_GNU_SOURCE -Werror
 LFLAGS = -L$(HOME)/cmpt433/public/asound_lib_bbg
-LIBS = -lpthread -lasound
+LIBS = -lpthread -lasound -lmad
 
 #SRCS = main.c network.c control.c audio.c downloader.c disp.c
 SRCS = $(wildcard *.c)
@@ -15,9 +14,6 @@ all: app node script
 
 app:
 	$(CC_C) $(CFLAGS) $(SRCS) $(LFLAGS) $(LIBS) -o $(OUTDIR)/$(OUTFILE)
-
-desktop:
-	$(CC) $(CFLAGS) $(SRCS) $(LIBS) -D MP_DESKTOP -o $(DESKTOPOUTFILE)
 
 node:
 	mkdir -p $(OUTDIR)/music-player-nodejs-copy/
