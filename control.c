@@ -602,9 +602,54 @@ void control_getSongProgress(int *curr, int *end)
         *end = au_buf_end;
 }
 
-const song_t *control_getQueue(void)
+char *control_getQueueVIDs(void)
 {
-        return song_queue;
+        char *buf, *c;
+        song_t *s;
+        unsigned int length, bytes;
+
+        pthread_mutex_lock(&mtx_queue);
+
+        s = song_queue;
+        length = 0;
+        while (s) {
+                ++length;
+                s = s->next;
+        }
+
+        // we still want it to produce an empty string if there
+        // are no songs in the queue
+        if (!length)
+                length = 1;
+
+        buf = malloc((CONTROL_MAXLEN_VID+1) * length);
+        if (!buf)
+                goto out;
+        (void)memset(buf, 0, (CONTROL_MAXLEN_VID+1) * length);
+
+        s = song_queue;
+        c = buf;
+        while (s) {
+                bytes = sprintf(c, "%s,", s->vid);
+                if (!bytes) {
+                        printf(PRINTF_MODULE "Error: unable to create queue ids string\n");
+                        free(buf);
+                        buf = NULL;
+                        goto out;
+                }
+
+                c += bytes;
+                s = s->next;
+        }
+
+        // remove the last comma
+        if (c > buf)
+                *(c-1) = '\0';
+
+out:
+        pthread_mutex_unlock(&mtx_queue);
+
+        return buf;
 }
 
 int control_onDownloadComplete(song_t* song)

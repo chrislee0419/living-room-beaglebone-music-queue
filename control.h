@@ -106,10 +106,11 @@ enum control_song_status control_setSongStatus(song_t *song, enum control_song_s
 void control_getSongProgress(int *curr, int *end);
 
 /**
- * Get the song queue. First item is the current song
- * @return Linked list of song_t objects
+ * Get a string containing a comma-delimited list of YouTube IDs in the queue
+ * Returned in the order of first to last. May contain duplicate IDs.
+ * @return Newly allocated string
  */
-const song_t *control_getQueue(void);
+char *control_getQueueVIDs(void);
 
 /**
  * Get the previous CONTROL_PREV_SONGS_LIST_LEN songs played

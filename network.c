@@ -131,12 +131,12 @@ static int queueSystemStatusMessage(struct sockaddr_in sa)
 {
         char buf[BUFFER_SIZE] = {0};
         char *c;
+        char *vids;
         size_t bytes;
-        const song_t *s;
         int song_status;
 
         c = buf;
-        s = control_getQueue();
+        vids = control_getQueueVIDs();
 
         bytes = sprintf(c, "vol=%d\n", audio_getVolume());
         if (!bytes)
@@ -159,7 +159,9 @@ static int queueSystemStatusMessage(struct sockaddr_in sa)
                 goto out;
         c += bytes;
 
-        if (s) {
+        // if there exists a song in the queue, we should be able to show
+        // the play progress of the current song
+        if (vids) {
                 int play_curr;
                 int play_end;
 
@@ -175,23 +177,54 @@ static int queueSystemStatusMessage(struct sockaddr_in sa)
                 goto out;
         c += bytes;
 
-        while (s) {
-                if ((c-buf) >= BUFFER_SIZE - CONTROL_MAXLEN_VID - QUEUE_OFFSET) {
-                        queueOutboundMessage(buf, (c-buf), sa);
+        if (vids) {
+                char *pos = vids;
+
+                // send in batches if entire string doesn't fit in the buffer
+                while (strlen(pos) >= BUFFER_SIZE - (c-buf)) {
+                        char *next_pos;
+
+                        // place what we can into the buffer
+                        next_pos = pos + BUFFER_SIZE - (c-buf) - CONTROL_MAXLEN_VID - 1;
+                        bytes = 0;
+
+                        // buffer has to be able to fit at least one of the video id strings
+                        if (next_pos >= pos) {
+                                // NOTE: strchr should never return NULL, otherwise we
+                                // can fit the remaining chars in pos into the buffer
+                                next_pos = strchr(next_pos, ',');
+
+                                *next_pos = '\0';
+                                ++next_pos;
+
+                                (void)strcpy(c, pos);
+                                bytes = next_pos - pos;
+                        } else {
+                                // unable to fit any video id strings
+                                next_pos = pos;
+                        }
+
+                        queueOutboundMessage(buf, (c-buf) + bytes, sa);
                         (void)memset(buf, 0, BUFFER_SIZE);
                         c = buf;
 
+                        // begin new outbound message that contains the rest of the queue
                         bytes = sprintf(c, "queuemore=");
-                        if (!bytes)
+                        if (!bytes) {
+                                free(vids);
                                 goto out;
+                        }
+
                         c += bytes;
+                        pos = next_pos;
                 }
 
-                bytes = sprintf(c, "%s,", s->vid);
-                if (!bytes)
-                        goto out;
-                c += bytes;
-                s = s->next;
+                // send remaining part of the string
+                (void)strcpy(c, pos);
+                c += strlen(pos);
+
+                // finished with the string, free it now
+                free(vids);
         }
 
         queueOutboundMessage(buf, (c-buf), sa);
