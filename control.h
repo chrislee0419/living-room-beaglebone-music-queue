@@ -11,11 +11,9 @@
 
 enum control_song_status {
         CONTROL_SONG_STATUS_UNKNOWN     = -1,
-        CONTROL_SONG_STATUS_QUEUED      = 0,
-        CONTROL_SONG_STATUS_LOADING     = 1,
-        CONTROL_SONG_STATUS_LOADED      = 2,
-        CONTROL_SONG_STATUS_REMOVED     = 3,            // When song is removed while downloading
-        CONTROL_SONG_STATUS_PLAYING     = 4
+        CONTROL_SONG_STATUS_QUEUED      = 0,    // song is not ready to be played
+        CONTROL_SONG_STATUS_LOADED      = 1,    // ready to play
+        CONTROL_SONG_STATUS_REMOVED     = 2,    // marked for removal
 };
 
 typedef struct song {
@@ -84,6 +82,14 @@ void control_addSong(char *url);
 int control_removeSong(char *url, int index);
 
 /**
+ * Copies the path to the song's associated music file to a provided buffer.
+ * @param song Song object
+ * @param buf Address to a buffer
+ * @return 0, if successful; otherwise, error
+ */
+int control_getSongFilepath(song_t *song, char **buf);
+
+/**
  * Set the status of a song. Should be used for thread safety.
  * NOTE: The song will be deleted if the song's status was set to CONTROL_SONG_STATUS_REMOVED
  * @param song Address of song to change (must exist in the queue)
@@ -115,7 +121,8 @@ const song_t *control_getPlayedSongs(void);
 /**
  * Callback when a download completes
  * @param song Address of song that finished downloading
+ * @return 0, if successful; otherwise, error
  */
-void control_onDownloadComplete(song_t* song);
+int control_onDownloadComplete(song_t* song);
 
 #endif

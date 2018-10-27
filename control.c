@@ -10,17 +10,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <errno.h>
+#include <mad.h>
 
 #define PRINTF_MODULE           "[control ] "
 
-#define DATA_OFFSET_INTO_WAVE   44
+#define CMDLINE_MAX_LEN         512
+#define BUFFER_SIZE             2000
 #define SAMPLE_SIZE             (sizeof(short))
 
-#define NUM_SONGS_TO_DOWNLOAD 3
+#define NUM_SONGS_TO_DOWNLOAD   3
+#define QUEUE_CLEAN_TIME        5
 
+static const char* RM_CMDLINE = "rm %s";
 static const char* CACHE_DIR = "/root/cache/";
 static const char* MP3_EXT = ".mp3";
 
@@ -38,7 +43,9 @@ static pthread_mutex_t mtx_play  = PTHREAD_MUTEX_INITIALIZER;
 
 static int loop = 0;
 static pthread_t th_aud;
-static pthread_t th_ping;
+static pthread_t th_dec;
+static pthread_t th_clr;
+
 static pthread_mutex_t mtx_audio = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mtx_queue = PTHREAD_MUTEX_INITIALIZER;
 
@@ -160,7 +167,6 @@ void control_deleteAndFreeSong(song_t* song) {
         }
 
         if (shouldDeleteFile) {
-
                 // Delete wav file on disk
                 // only delete if the song does not appear again in the queue
                 bool isSongDuplicated = false;
@@ -205,99 +211,6 @@ void control_deleteAndFreeSong(song_t* song) {
         }
 }
 
-// Called when a song is done playing
-// Or after a song is skipped
-static int loadNewSong(void)
-{
-        FILE *file;
-        int sizeInBytes;
-        int samplesRead;
-        int bufEnd;
-        short *buf;
-        song_t* song_curr;
-
-        // get new song from queue
-        pthread_mutex_lock(&mtx_queue);
-        if (!song_queue) {
-                pthread_mutex_unlock(&mtx_queue);
-                return ENODATA;
-        }
-
-        if (song_queue->status == CONTROL_SONG_STATUS_PLAYING) {
-                // Delete first song, and move next song into queue
-                song_t* song_prev = song_queue;
-                pthread_mutex_unlock(&mtx_queue);
-                control_deleteAndFreeSong(song_prev);
-                disp_setNumber(getSongQueueLength());
-                pthread_mutex_lock(&mtx_queue);
-        }
-
-        if (!song_queue) {
-                pthread_mutex_unlock(&mtx_queue);
-                return ENODATA;
-        } else  if (song_queue->status != CONTROL_SONG_STATUS_LOADED) {
-                // check if the audio file has been downloaded
-                pthread_mutex_unlock(&mtx_queue);
-                return ENODATA;
-        } else {
-                // no song playing previously, load the first song
-                song_curr = song_queue;
-        }
-        pthread_mutex_unlock(&mtx_queue);
-
-        printf(PRINTF_MODULE "Info: Playing next song ");
-        debugPrintSong(song_curr);
-
-        // Open file
-        file = fopen(song_curr->filepath, "r");
-        if (file == NULL) {
-                printf(PRINTF_MODULE "Warning: Unable to open file %s.\n", song_curr->filepath);
-                (void)fflush(stdout);
-                return EIO;
-        }
-
-        // Get file size
-        fseek(file, 0, SEEK_END);
-        sizeInBytes = ftell(file) - DATA_OFFSET_INTO_WAVE;
-        fseek(file, DATA_OFFSET_INTO_WAVE, SEEK_SET);
-        bufEnd = sizeInBytes / SAMPLE_SIZE;
-
-        // Allocate Space
-        buf = malloc(sizeInBytes);
-        if (buf == NULL) {
-                printf(PRINTF_MODULE "Warning: Unable to allocate %d bytes for file %s.\n",
-                        sizeInBytes, song_curr->filepath);
-                (void)fflush(stdout);
-                fclose(file);
-                return ENOMEM;
-        }
-
-        // Read data:
-        samplesRead = fread(buf, SAMPLE_SIZE, bufEnd, file);
-        if (samplesRead != bufEnd) {
-                printf(PRINTF_MODULE "Warning: Unable to read %d samples from file %s (read %d).\n",
-                        bufEnd, song_curr->filepath, samplesRead);
-                fclose(file);
-                free(buf);
-                return EIO;
-        }
-
-        fclose(file);
-
-        control_setSongStatus(song_curr, CONTROL_SONG_STATUS_PLAYING);        
-
-        // copy data to au_buf
-        pthread_mutex_lock(&mtx_audio);
-        if (au_buf)
-                free(au_buf);
-        au_buf = buf;
-        au_buf_start = 0;
-        au_buf_end = bufEnd;
-        pthread_mutex_unlock(&mtx_audio);
-
-        return 0;
-}
-
 static void clearSongQueue(void)
 {
         song_t *s;
@@ -309,6 +222,21 @@ static void clearSongQueue(void)
                 free(s);
         }
         pthread_mutex_unlock(&mtx_queue);
+}
+
+enum mad_flow madInputCallback(void *data, struct mad_stream *stream)
+{
+        return MAD_FLOW_CONTINUE;
+}
+
+enum mad_flow madOutputCallback(void *data, struct mad_header const *header, struct mad_pcm *pcm)
+{
+        return MAD_FLOW_CONTINUE;
+}
+
+enum mad_flow madErrorCallback(void *data, struct mad_stream *stream, struct mad_frame *frame)
+{
+        return MAD_FLOW_CONTINUE:
 }
 
 static void *audioLoop(void *arg)
@@ -367,6 +295,83 @@ static void *audioLoop(void *arg)
         return NULL;
 }
 
+static void *decoderLoop(void *arg)
+{
+        struct timespec sleep_time = { .tv_nsec = 1 };
+
+        while (loop) {
+                pthread_mutex_lock(&mtx_queue);
+
+                // sleep briefly if the song queue is empty
+                if (!song_queue) {
+                        pthread_mutex_unlock(&mtx_queue);
+                        (void)nanosleep(&sleep_time, NULL);
+                        continue;
+                }
+        }
+
+        return NULL;
+}
+
+static void *queueCleanerLoop(void *arg)
+{
+        struct timespec sleep_time = { .tv_sec = QUEUE_CLEAN_TIME };
+        char cmdline[CMDLINE_MAX_LEN];
+        song_t *curr = NULL;
+        song_t *next = NULL;
+
+        while (loop) {
+                pthread_mutex_lock(&mtx_queue);
+
+                if (!song_queue)
+                        goto sleep;
+
+                curr = song_queue;
+                while (curr) {
+                        next = curr->next;
+
+                        if (curr->status == CONTROL_SONG_STATUS_REMOVED) {
+                                // remove the song file if it exists
+                                // should be safe to use while song is downloading
+                                if (!access(curr->filepath, F_OK)) {
+                                        // only remove the song file if the song isn't
+                                        // duplicated in the queue
+                                        song_t *s = curr->next;
+
+                                        while (s) {
+                                                if (strcmp(curr->vid, s->vid) == 0)
+                                                        break;
+                                                s = s->next;
+                                        }
+
+                                        // no duplicate, safe to delete file
+                                        if (!s) {
+                                                sprintf(cmdline, RM_CMDLINE, curr->filepath);
+                                                system(cmdline);
+                                        }
+                                }
+
+                                // remove song from queue
+                                if (song_queue == curr)
+                                        song_queue = next;
+                                else
+                                        curr->prev->next = curr->next;
+                                curr->next->prev = curr->prev;
+
+                                free(curr);
+                        }
+
+                        curr = next;
+                }
+
+sleep:
+                pthread_mutex_unlock(&mtx_queue);
+                (void)nanosleep(&sleep_time, NULL);
+        }
+
+        return NULL;
+}
+
 /*
  * Public functions
  */
@@ -379,7 +384,11 @@ int control_init(void)
         downloader_init();
 
         if ((err = pthread_create(&th_aud, NULL, audioLoop, NULL)))
-                printf(PRINTF_MODULE "Error: unable to create thread for audio\n");
+                printf(PRINTF_MODULE "Error: unable to create thread to play audio\n");
+        else if ((err = pthread_create(&th_dec, NULL, decoderLoop, NULL)))
+                printf(PRINTF_MODULE "Error: unable to create thread for MP3 decoding\n");
+        else if ((err = pthread_create(&th_clr, NULL, queueCleanerLoop, NULL)))
+                printf(PRINTF_MODULE "Error: unable to create thread for song queue management\n");
 
         return err;
 }
@@ -389,7 +398,8 @@ void control_cleanup(void)
         loop = 0;
 
         (void)pthread_join(th_aud, NULL);
-        (void)pthread_join(th_ping, NULL);
+        (void)pthread_join(th_dec, NULL);
+        (void)pthread_join(th_clr, NULL);
 
         downloader_cleanup();
 
@@ -532,6 +542,28 @@ int control_removeSong(char *url, int index)
         return 0;
 }
 
+int control_getSongFilepath(song_t *song, char **buf)
+{
+        // verify that the song is in the queue first
+        song_t *s;
+
+        pthread_mutex_lock(&mtx_queue);
+
+        s = song_queue;
+        while (s) {
+                if (s == song) {
+                        (void)strcpy(*buf, song->filepath);
+                        pthread_mutex_unlock(&mtx_queue);
+                        return 0;
+                }
+                s = s->next;
+        }
+
+        pthread_mutex_unlock(&mtx_queue);
+
+        return 1;
+}
+
 enum control_song_status control_setSongStatus(song_t *song, enum control_song_status status)
 {
         song_t *s;
@@ -565,6 +597,7 @@ enum control_song_status control_setSongStatus(song_t *song, enum control_song_s
 
 void control_getSongProgress(int *curr, int *end)
 {
+        // TODO: needs to be updated for mp3s
         *curr = au_buf_start;
         *end = au_buf_end;
 }
@@ -574,12 +607,22 @@ const song_t *control_getQueue(void)
         return song_queue;
 }
 
-void control_onDownloadComplete(song_t* song) 
+int control_onDownloadComplete(song_t* song)
 {
-        if (song->status == CONTROL_SONG_STATUS_REMOVED) {
-                control_deleteAndFreeSong(song);
-        }
-        else {
+        song_t *s;
+        enum control_song_status status;
+
+        status = control_setSongStatus(song, CONTROL_SONG_STATUS_LOADED);
+
+        if (status != CONTROL_SONG_STATUS_LOADED)
+                return status;
+
+        pthread_mutex_lock(&mtx_queue);
+
+        // only try to play the song automatically if the downloaded
+        // song is at the front of the queue
+        if (song == song_queue)
                 control_playAudio();
-        }
+
+        pthread_mutex_unlock(&mtx_queue);
 }
