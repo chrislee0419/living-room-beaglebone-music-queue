@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
 #include <time.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -19,11 +20,17 @@
 #define PRINTF_MODULE           "[control ] "
 
 #define CMDLINE_MAX_LEN         512
-#define BUFFER_SIZE             2000
-#define SAMPLE_SIZE             (sizeof(short))
+#define BUFFER_SIZE             4000
+#define SAMPLE_SIZE             (sizeof(int32_t))
 
 #define NUM_SONGS_TO_DOWNLOAD   3
 #define QUEUE_CLEAN_TIME        5
+
+struct song_buffer {
+        song_t *song;
+        char *buf;
+        size_t length;
+};
 
 static const char* RM_CMDLINE = "rm %s";
 static const char* CACHE_DIR = "/root/cache/";
@@ -32,9 +39,9 @@ static const char* MP3_EXT = ".mp3";
 static song_t *song_queue = NULL;
 static song_t *prev_songs[CONTROL_PREV_SONGS_LIST_LEN] = {0};
 
-static short *au_buf = NULL;            // entire music file
+static int32_t *au_buf = NULL;          // decoded parts of music file
 static int au_buf_start = 0;            // represents current index of audio data
-static int au_buf_end = 0;              // represents index after valid audio data
+static int au_buf_available = 0;        // represents the length of available data
 
 // playback control on master device
 static int repeat_status = 0;
@@ -64,15 +71,9 @@ static void updateDownloadedSongs(void)
                         break;
                 } 
 
-                if (current_song->status == CONTROL_SONG_STATUS_QUEUED) {
-                        // Download the song in new thread
+                // Download the song in new thread
+                if (current_song->status == CONTROL_SONG_STATUS_QUEUED)
                         downloader_queueDownloadSong(current_song);
-                }
-                else if (current_song->status == CONTROL_SONG_STATUS_REMOVED) {
-                        // Tried to remove song while downloading
-                        // Remove it here now
-                        control_removeSong(current_song->vid, CONTROL_RMSONG_FIRST);
-                }
 
                 current_song = current_song->next;
         }
@@ -80,6 +81,7 @@ static void updateDownloadedSongs(void)
 
 static void debugPrintSong(song_t* song) {
 
+        // NOTE: not thread-safe, song could have been free'd
         if (song == NULL) {
                 printf("NULL song\n");
         } else {
@@ -91,17 +93,11 @@ static void debugPrintSong(song_t* song) {
                         case CONTROL_SONG_STATUS_QUEUED:
                                 strcpy(statusStr, "QUEUED");
                                 break;
-                        case CONTROL_SONG_STATUS_LOADING:
-                                strcpy(statusStr, "LOADING");
-                                break;
                         case CONTROL_SONG_STATUS_LOADED:
                                 strcpy(statusStr, "LOADED");
                                 break;
                         case CONTROL_SONG_STATUS_REMOVED:
                                 strcpy(statusStr, "REMOVED");
-                                break;
-                        case CONTROL_SONG_STATUS_PLAYING:
-                                strcpy(statusStr, "PLAYING");
                                 break;
                 }
                 printf("id=[%s], status=[%s], file=[%s]\n", song->vid, statusStr, song->filepath);
@@ -110,6 +106,7 @@ static void debugPrintSong(song_t* song) {
 
 static void debugPrintSongList(void)
 {
+        // NOTE: not thread-safe, song could have been free'd
         song_t* current_song = song_queue;
         while (current_song) {
                 debugPrintSong(current_song);
@@ -126,89 +123,12 @@ static int getSongQueueLength(void)
         s = song_queue;
         while (s) {
                 s = s->next;
-                length++;
+                length += (s->status == CONTROL_SONG_STATUS_QUEUED ||
+                           s->status == CONTROL_SONG_STATUS_LOADED) ? 1 : 0;
         }
         pthread_mutex_unlock(&mtx_queue);
 
         return length;
-}
-
-void control_deleteAndFreeSong(song_t* song) {
-
-        printf(PRINTF_MODULE "Info: Deleting song - ");
-        debugPrintSong(song);
-
-        if (!song) return;
-
-        bool shouldRemoveFromQueue = false;
-        bool shouldDeleteFile = false;
-        bool shouldFree = false;
-
-        if (song->status == CONTROL_SONG_STATUS_QUEUED) {
-                shouldRemoveFromQueue = true;
-                shouldFree = true;
-        }
-        else if (song->status == CONTROL_SONG_STATUS_LOADING) {
-                // Dangerous to delete while downloading
-                // Set status to delete later by the Downloader
-                control_setSongStatus(song, CONTROL_SONG_STATUS_REMOVED);
-                shouldRemoveFromQueue = true;
-        }
-        else if (song->status == CONTROL_SONG_STATUS_LOADED
-                || song->status == CONTROL_SONG_STATUS_PLAYING) {
-
-                shouldRemoveFromQueue = true;
-                shouldDeleteFile = true;
-                shouldFree = true;
-        }
-        else if (song->status == CONTROL_SONG_STATUS_REMOVED) {
-                shouldDeleteFile = true;
-                shouldFree = true;
-        }
-
-        if (shouldDeleteFile) {
-                // Delete wav file on disk
-                // only delete if the song does not appear again in the queue
-                bool isSongDuplicated = false;
-                song_t* curr_song = song_queue;
-                while (curr_song) {
-                        if (strcmp(curr_song->vid, song->vid) == 0 && curr_song != song) {
-                                isSongDuplicated = true;
-                                break;
-                        }
-                        curr_song = curr_song->next;
-                }
-
-                if (!isSongDuplicated) {
-                        downloader_deleteSongFile(song);
-                }
-        }
-
-        if (shouldRemoveFromQueue) {
-                pthread_mutex_lock(&mtx_queue);
-                // If deleting the first song, update the song_queue
-                if (song == song_queue) {
-                        song_queue = song->next;
-                }
-                else {      
-                        // Otherwise find predecessor and make it point to the next song  
-                        song_t* prev_song = song_queue;
-                        while(prev_song && prev_song->next != song) {
-                                prev_song = prev_song->next;
-                        }
-
-                        if (prev_song) {
-                                prev_song->next = song->next;
-                        }
-                }
-                pthread_mutex_unlock(&mtx_queue);
-
-                updateDownloadedSongs();
-        }
-
-        if (shouldFree) {
-                free(song);
-        }
 }
 
 static void clearSongQueue(void)
@@ -224,25 +144,88 @@ static void clearSongQueue(void)
         pthread_mutex_unlock(&mtx_queue);
 }
 
-enum mad_flow madInputCallback(void *data, struct mad_stream *stream)
+static enum mad_flow madInputCallback(void *data, struct mad_stream *stream)
 {
+        struct song_buffer *buf = data;
+
+        if (!buf->length)
+                return MAD_FLOW_STOP;
+
+        // work with the entire file, the output callback will handle decoder speed
+        mad_stream_buffer(stream, buf->buf, buf->length);
+        buf->length = 0;
+
         return MAD_FLOW_CONTINUE;
 }
 
-enum mad_flow madOutputCallback(void *data, struct mad_header const *header, struct mad_pcm *pcm)
+static enum mad_flow madOutputCallback(void *data, struct mad_header const *header, struct mad_pcm *pcm)
 {
+        unsigned int dual_channel, index;
+        song_t s;
+        struct song_buffer *sb = data;
+        struct timespec sleep_time = { .tv_nsec = 1 };
+
+        // check if the song is still in the queue
+        pthread_mutex_lock(&mtx_queue);
+
+        s = song_queue;
+        while (s) {
+                if (s == sb->song) {
+                        if (s->status != CONTROL_SONG_STATUS_LOADED)
+                                s = NULL;
+                        break;
+                }
+                s = s->next;
+        }
+
+        // if the song was removed from the queue, we can stop playing it
+        if (!s) {
+                pthread_mutex_unlock(&mtx_queue);
+                return MAD_FLOW_STOP;
+        }
+
+        pthread_mutex_unlock(&mtx_queue);
+
+        dual_channel = pcm->channels == 2 ? 1 : 0;
+
+        while (index < pcm->length) {
+                pthread_mutex_lock(&mtx_audio);
+
+                // check if audio buffer is full
+                if (au_buf_available >= BUFFER_SIZE)
+                        goto cont;
+
+                // fill as much of the audio buffer as possible
+                while (au_buf_available < BUFFER_SIZE-1 && index < pcm->length) {
+                        au_buf[au_buf_available % BUFFER_SIZE] = pcm->samples[0][index];
+                        ++au_buf_available;
+                        au_buf[au_buf_available % BUFFER_SIZE] = pcm->samples[dual_channel][index];
+                        ++au_buf_available;
+
+                        ++index;
+                }
+cont:
+                pthread_mutex_unlock(&mtx_audio);
+                (void)nanosleep(&sleep_time, NULL);
+        }
+
         return MAD_FLOW_CONTINUE;
 }
 
-enum mad_flow madErrorCallback(void *data, struct mad_stream *stream, struct mad_frame *frame)
+static enum mad_flow madErrorCallback(void *data, struct mad_stream *stream, struct mad_frame *frame)
 {
+        printf(PRINTF_MODULE "Warning: MP3 decoding error occurred (%s)\n",
+                mad_stream_errorstr(stream));
+        (void)fflush(stdout);
+
         return MAD_FLOW_CONTINUE:
 }
 
 static void *audioLoop(void *arg)
 {
-        unsigned int num_played;
-        short *buf;
+        unsigned int num_played, num_to_play;
+        uint32_t *buf;
+        struct timespec sleep_time = { .tv_nsec = 1 };
 
         // prepare thread to be locked when first initialized (not playing)
         pthread_mutex_lock(&mtx_play);
@@ -254,40 +237,28 @@ static void *audioLoop(void *arg)
 
                 pthread_mutex_lock(&mtx_audio);
 
-                // take new song from the top of the queue if:
-                // - au_buf (audio data from file) is NULL
-                // - end of the current song is reached
-                if (!au_buf || au_buf_end-1 <= au_buf_start) {
-                        // repeat song if set
-                        if (au_buf && repeat_status && song_queue) {
-                                au_buf_start = 0;
-                        } else {
-                                // unlock the audio mutex, as loadNewSong will need it
-                                pthread_mutex_unlock(&mtx_audio);
-                                if (loadNewSong()) {
-                                        // if queue is empty/error occurred, pause audio playback
-                                        control_pauseAudio();
-                                        continue;
-                                }
-                                pthread_mutex_lock(&mtx_audio);
-                        }
-                }
-
-                if (!au_buf) {
+                // check if audio data is available to be played
+                // if not, we can sleep momentarily
+                if (au_buf_available == 0) {
                         pthread_mutex_unlock(&mtx_audio);
-                        control_pauseAudio();
+                        (void)nanosleep(&sleep_time, NULL);
                         continue;
                 }
 
-                buf = au_buf + au_buf_start;
-                num_played = audio_playAudio(buf, au_buf_end - au_buf_start);
+                while (au_buf_available) {
+                        buf = au_buf + au_buf_start;
+                        num_to_play = au_buf_available + au_buf_start > BUFFER_SIZE ?
+                                BUFFER_SIZE - au_buf_start :
+                                au_buf_start + au_buf_available;
 
-                if (num_played < 0) {
-                        pthread_mutex_unlock(&mtx_audio);
-                        continue;
+                        num_played = audio_playAudio(buf, num_to_play);
+
+                        if (num_played < 0)
+                                break;
+
+                        au_buf_available -= num_played;
+                        au_buf_start = (au_buf_start + num_played) % BUFFER_SIZE;
                 }
-
-                au_buf_start += num_played;
 
                 pthread_mutex_unlock(&mtx_audio);
         }
@@ -297,17 +268,94 @@ static void *audioLoop(void *arg)
 
 static void *decoderLoop(void *arg)
 {
-        struct timespec sleep_time = { .tv_nsec = 1 };
+        song_t current_song;
+        int fd;
+        struct stat st;
+        char *music_buf;
+        struct song_buffer sb;
+        struct mad_decoder decoder;
 
         while (loop) {
-                pthread_mutex_lock(&mtx_queue);
-
-                // sleep briefly if the song queue is empty
-                if (!song_queue) {
-                        pthread_mutex_unlock(&mtx_queue);
-                        (void)nanosleep(&sleep_time, NULL);
+                if (!play_status) {
+                        sleep(1);
                         continue;
                 }
+
+                pthread_mutex_lock(&mtx_queue);
+
+                current_song = song_queue;
+
+                // sleep briefly if the song queue is empty
+                if (!current_song)
+                        goto sleep;
+
+                while (current_song) {
+                        if (current_song->status == CONTROL_SONG_STATUS_LOADED ||
+                            current_song->status == CONTROL_SONG_STATUS_QUEUED)
+                                break;
+                        current_song = current_song->next;
+                }
+
+                // all songs in the queue are removed or the first song
+                // in the queue has not yet been downloaded
+                if (!current_song || current_song->status == CONTROL_SONG_STATUS_QUEUED)
+                        goto sleep;
+
+                // load file into memory
+                fd = open(current_song->filepath, O_RDONLY);
+                // could not open file, retry?
+                if (fd < 0)
+                        goto sleep;
+
+                // get file size
+                if (fstat(fd, &st) == -1) {
+                        (void)close(fd);
+                        goto sleep;
+                }
+
+                music_buf = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+                if (music_buf == MAP_FAILED) {
+                        (void)close(fd);
+                        goto sleep;
+                }
+
+                sb.song = current_song;
+
+                pthread_mutex_unlock(&mtx_queue);
+
+                sb.buf = music_buf;
+                sb.length = st.st_size;
+
+                // start decoding
+                mad_decoder_init(&decoder, &sb, madInputCallback, NULL, NULL,
+                        madOutputCallback, madErrorCallback, NULL);
+                (void)mad_decoder_run(&decoder, MAD_DECODER_MODE_SYNC);
+                mad_decoder_finish(&decoder);
+
+                // close file
+                munmap(music_buf, st.st_size);
+                (void)close(fd);
+
+                // move onto the next song in the queue if repeat is not set
+                if (!repeat_status) {
+                        song_t s;
+
+                        pthread_mutex_lock(&mtx_queue);
+
+                        // verify that the current song is still in the queue
+                        s = song_queue;
+                        while (s && s != current_song)
+                                s = s->next;
+                        if (s)
+                                current_song->status = CONTROL_SONG_STATUS_REMOVED;
+
+                        pthread_mutex_unlock(&mtx_queue);
+                }
+
+                continue;
+sleep:
+                pthread_mutex_unlock(&mtx_queue);
+                (void)sleep(1);
         }
 
         return NULL;
@@ -344,7 +392,7 @@ static void *queueCleanerLoop(void *arg)
                                                 s = s->next;
                                         }
 
-                                        // no duplicate, safe to delete file
+                                        // no duplicates, safe to delete file
                                         if (!s) {
                                                 sprintf(cmdline, RM_CMDLINE, curr->filepath);
                                                 system(cmdline);
@@ -424,20 +472,16 @@ void control_playAudio(void)
         // NOTE: play_status change must occur after changing the mutex
         pthread_mutex_unlock(&mtx_play);
         play_status = 1;
-
-        // if buffer is empty, next song should be enqueued by audioLoop
 }
 
 void control_pauseAudio(void)
 {
-        if (mode == CONTROL_MODE_MASTER) {
-                // check if it is already not playing
-                if (!play_status)
-                        return;
+        // check if it is already not playing
+        if (!play_status)
+                return;
 
-                pthread_mutex_lock(&mtx_play);
-                play_status = 0;
-        }
+        pthread_mutex_lock(&mtx_play);
+        play_status = 0;
 }
 
 int control_getPlayStatus(void)
@@ -454,18 +498,8 @@ void control_skipSong(void)
                 was_playing = 1;
         }
 
-        // TODO: Handle skipping when song is still loading
-        // TODO: Reset audio to 0
-        control_deleteAndFreeSong(song_queue);
-        disp_setNumber(getSongQueueLength());
-
-        // Delete the current buf, so we're forced to load a new one
-        pthread_mutex_lock(&mtx_audio);
-        if (au_buf)
-                free(au_buf);
-                au_buf = NULL;
-        au_buf_start = 0;
-        pthread_mutex_unlock(&mtx_audio);
+        // skipping a playing song is equivalent to removing the first song
+        control_removeSong(NULL, CONTROL_RMSONG_FIRST);
 
         // resume audio if it was playing before
         if (was_playing) {
@@ -485,6 +519,7 @@ int control_getRepeatStatus(void)
 
 void control_addSong(char *url)
 {
+        // TODO: check if function this works with the new code
         song_t* new_song = malloc(sizeof(song_t));
 
         strcpy(new_song->vid, url);
@@ -523,23 +558,39 @@ void control_addSong(char *url)
 
 int control_removeSong(char *url, int index)
 {
-        // TODO
-        printf(PRINTF_MODULE "Notice: control_removeSong() got %s, %d\n", url, index);
-        (void)fflush(stdout);
+        song_t *song;
+        int i = 0;
+        int err = 0;
 
-        // Find song in list
-        // use pthread_mutex_lock(&mtx_queue) when modifying song_curr or song_queue
+        pthread_mutex_lock(&mtx_queue);
 
-        // Delete file from disk
+        song = song_queue;
+        while (song) {
+                if (song->status != CONTROL_SONG_STATUS_REMOVED)
+                        i++;
+                if ((index == CONTROL_RMSONG_FIRST && i != 0) || i > index)
+                        break;
+                song = song->next;
+        }
 
-        // free() song object only after we have confirmed it is not in the downloader's queue
+        // we only need to mark the song as removed if it exists
+        // the cleaner thread should do the actual removal
+        if (song && ((i == index && !strcmp(url, song->vid)) ||
+                     (index == CONTROL_RMSONG_FIRST)))
+                song->status = CONTROL_SONG_STATUS_REMOVED;
+        else
+                err = 1;
 
-        // Download new songs if needed
-        updateDownloadedSongs();
+        pthread_mutex_unlock(&mtx_queue);
 
-        disp_setNumber(getSongQueueLength());
+        if (!err) {
+                // Download new songs if needed
+                updateDownloadedSongs();
 
-        return 0;
+                disp_setNumber(getSongQueueLength());
+        }
+
+        return err;
 }
 
 int control_getSongFilepath(song_t *song, char **buf)
@@ -666,6 +717,7 @@ int control_onDownloadComplete(song_t* song)
 
         // only try to play the song automatically if the downloaded
         // song is at the front of the queue
+        // NOTE: song could be removed by the time it reaches mutex, but shouldn't matter
         if (song == song_queue)
                 control_playAudio();
 

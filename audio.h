@@ -1,6 +1,8 @@
 #ifndef _AUDIO_H_
 #define _AUDIO_H_
 
+#include <stdint.h>
+
 #define AUDIO_VOLUME_MIN        0
 #define AUDIO_VOLUME_MAX        100
 
@@ -21,7 +23,7 @@ void audio_cleanup(void);
  * @param size Size of buffer
  * @return Number of indices played; <0, error
  */
-unsigned int audio_playAudio(short *buf, unsigned int size);
+unsigned int audio_playAudio(int32_t *buf, unsigned int size);
 
 /**
  * Flushes audio data buffer

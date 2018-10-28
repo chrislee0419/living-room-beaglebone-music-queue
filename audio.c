@@ -39,7 +39,7 @@ int audio_init(void)
                 goto out;
 
         err = snd_pcm_set_params(handle,
-                        SND_PCM_FORMAT_S16_LE,
+                        SND_PCM_FORMAT_S32_LE,
                         SND_PCM_ACCESS_RW_INTERLEAVED,
                         NUM_CHANNELS,
                         SAMPLE_RATE,
@@ -64,7 +64,7 @@ void audio_cleanup(void)
         snd_pcm_close(handle);
 }
 
-unsigned int audio_playAudio(short *buf, unsigned int size)
+unsigned int audio_playAudio(int32_t *buf, unsigned int size)
 {
         snd_pcm_sframes_t frames;
 	unsigned int frames_available;
