@@ -100,10 +100,9 @@ enum control_song_status control_setSongStatus(song_t *song, enum control_song_s
 
 /**
  * Get the playback progress of the current song
- * @param curr Address to store current position of playback
- * @param end Address to store total indices of song
+ * @return Seconds elapsed for the current song
  */
-void control_getSongProgress(int *curr, int *end);
+long control_getSongProgress(void);
 
 /**
  * Get a string containing a comma-delimited list of YouTube IDs in the queue

@@ -162,11 +162,10 @@ static int queueSystemStatusMessage(struct sockaddr_in sa)
         // if there exists a song in the queue, we should be able to show
         // the play progress of the current song
         if (vids) {
-                int play_curr;
-                int play_end;
+                long elapsed;
 
-                control_getSongProgress(&play_curr, &play_end);
-                bytes = sprintf(c, "progress=%d/%d\n", play_curr, play_end);
+                elapsed = control_getSongProgress();
+                bytes = sprintf(c, "progress=%ld\n", elapsed);
                 if (!bytes)
                         goto out;
                 c += bytes;

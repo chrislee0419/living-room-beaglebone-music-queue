@@ -43,6 +43,8 @@ static int32_t *au_buf = NULL;          // decoded parts of music file
 static int au_buf_start = 0;            // represents current index of audio data
 static int au_buf_available = 0;        // represents the length of available data
 
+static mad_timer_t progress = mad_timer_zero;
+
 // playback control on master device
 static int repeat_status = 0;
 static int play_status = 0;
@@ -146,13 +148,13 @@ static void clearSongQueue(void)
 
 static enum mad_flow madInputCallback(void *data, struct mad_stream *stream)
 {
-        struct song_buffer *buf = data;
+        struct song_buffer *sb = data;
 
         if (!buf->length)
                 return MAD_FLOW_STOP;
 
         // work with the entire file, the output callback will handle decoder speed
-        mad_stream_buffer(stream, buf->buf, buf->length);
+        mad_stream_buffer(stream, sb->buf, buf->length);
         buf->length = 0;
 
         return MAD_FLOW_CONTINUE;
@@ -208,6 +210,10 @@ cont:
                 pthread_mutex_unlock(&mtx_audio);
                 (void)nanosleep(&sleep_time, NULL);
         }
+
+        // update song progress (each frame should be roughly 26 ms), according to:
+        // https://stackoverflow.com/questions/6220660/calculating-the-length-of-mp3-frames-in-milliseconds
+        mad_timer_add(&progress, header->duration);
 
         return MAD_FLOW_CONTINUE;
 }
@@ -331,6 +337,7 @@ static void *decoderLoop(void *arg)
                         madOutputCallback, madErrorCallback, NULL);
                 (void)mad_decoder_run(&decoder, MAD_DECODER_MODE_SYNC);
                 mad_decoder_finish(&decoder);
+                progress = mad_timer_zero;
 
                 // close file
                 munmap(music_buf, st.st_size);
@@ -646,11 +653,9 @@ enum control_song_status control_setSongStatus(song_t *song, enum control_song_s
         return status;
 }
 
-void control_getSongProgress(int *curr, int *end)
+long control_getSongProgress(void)
 {
-        // TODO: needs to be updated for mp3s
-        *curr = au_buf_start;
-        *end = au_buf_end;
+        return progress.seconds;
 }
 
 char *control_getQueueVIDs(void)
