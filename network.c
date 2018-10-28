@@ -133,7 +133,6 @@ static int queueSystemStatusMessage(struct sockaddr_in sa)
         char *c;
         char *vids;
         size_t bytes;
-        int song_status;
 
         c = buf;
         vids = control_getQueueVIDs();
@@ -153,8 +152,7 @@ static int queueSystemStatusMessage(struct sockaddr_in sa)
                 goto out;
         c += bytes;
 
-        song_status = s ? s->status : CONTROL_SONG_STATUS_UNKNOWN;
-        bytes = sprintf(c, "status=%d\n", song_status);
+        bytes = sprintf(c, "status=%d\n", control_getFirstSongStatus());
         if (!bytes)
                 goto out;
         c += bytes;

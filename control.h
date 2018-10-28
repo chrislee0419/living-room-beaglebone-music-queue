@@ -87,7 +87,7 @@ int control_removeSong(char *url, int index);
  * @param buf Address to a buffer
  * @return 0, if successful; otherwise, error
  */
-int control_getSongFilepath(song_t *song, char **buf);
+int control_getSongFilepath(song_t *song, char *buf);
 
 /**
  * Set the status of a song. Should be used for thread safety.
@@ -97,6 +97,12 @@ int control_getSongFilepath(song_t *song, char **buf);
  * @return Current status of the song; CONTROL_SONG_STATUS_UNKNOWN, if error
  */
 enum control_song_status control_setSongStatus(song_t *song, enum control_song_status status);
+
+/**
+ * Get the status of the first valid song
+ * @return Current song status; CONTROL_SONG_STATUS_UNKNOWN, if error
+ */
+enum control_song_status control_getFirstSongStatus(void);
 
 /**
  * Get the playback progress of the current song

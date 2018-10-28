@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
 #include <fcntl.h>
 #include <time.h>
 #include <unistd.h>
@@ -28,7 +30,7 @@
 
 struct song_buffer {
         song_t *song;
-        char *buf;
+        unsigned char *buf;
         size_t length;
 };
 
@@ -37,13 +39,12 @@ static const char* CACHE_DIR = "/root/cache/";
 static const char* MP3_EXT = ".mp3";
 
 static song_t *song_queue = NULL;
-static song_t *prev_songs[CONTROL_PREV_SONGS_LIST_LEN] = {0};
 
 static int32_t *au_buf = NULL;          // decoded parts of music file
 static int au_buf_start = 0;            // represents current index of audio data
 static int au_buf_available = 0;        // represents the length of available data
 
-static mad_timer_t progress = mad_timer_zero;
+static mad_timer_t progress = { .seconds = 0, .fraction = 0 };
 
 // playback control on master device
 static int repeat_status = 0;
@@ -124,9 +125,9 @@ static int getSongQueueLength(void)
         pthread_mutex_lock(&mtx_queue);
         s = song_queue;
         while (s) {
-                s = s->next;
                 length += (s->status == CONTROL_SONG_STATUS_QUEUED ||
                            s->status == CONTROL_SONG_STATUS_LOADED) ? 1 : 0;
+                s = s->next;
         }
         pthread_mutex_unlock(&mtx_queue);
 
@@ -150,12 +151,12 @@ static enum mad_flow madInputCallback(void *data, struct mad_stream *stream)
 {
         struct song_buffer *sb = data;
 
-        if (!buf->length)
+        if (!sb->length)
                 return MAD_FLOW_STOP;
 
         // work with the entire file, the output callback will handle decoder speed
-        mad_stream_buffer(stream, sb->buf, buf->length);
-        buf->length = 0;
+        mad_stream_buffer(stream, sb->buf, sb->length);
+        sb->length = 0;
 
         return MAD_FLOW_CONTINUE;
 }
@@ -163,7 +164,7 @@ static enum mad_flow madInputCallback(void *data, struct mad_stream *stream)
 static enum mad_flow madOutputCallback(void *data, struct mad_header const *header, struct mad_pcm *pcm)
 {
         unsigned int dual_channel, index;
-        song_t s;
+        song_t *s;
         struct song_buffer *sb = data;
         struct timespec sleep_time = { .tv_nsec = 1 };
 
@@ -224,13 +225,13 @@ static enum mad_flow madErrorCallback(void *data, struct mad_stream *stream, str
                 mad_stream_errorstr(stream));
         (void)fflush(stdout);
 
-        return MAD_FLOW_CONTINUE:
+        return MAD_FLOW_CONTINUE;
 }
 
 static void *audioLoop(void *arg)
 {
         unsigned int num_played, num_to_play;
-        uint32_t *buf;
+        int32_t *buf;
         struct timespec sleep_time = { .tv_nsec = 1 };
 
         // prepare thread to be locked when first initialized (not playing)
@@ -274,10 +275,10 @@ static void *audioLoop(void *arg)
 
 static void *decoderLoop(void *arg)
 {
-        song_t current_song;
+        song_t *current_song;
         int fd;
         struct stat st;
-        char *music_buf;
+        unsigned char *music_buf;
         struct song_buffer sb;
         struct mad_decoder decoder;
 
@@ -340,12 +341,12 @@ static void *decoderLoop(void *arg)
                 progress = mad_timer_zero;
 
                 // close file
-                munmap(music_buf, st.st_size);
+                (void)munmap(music_buf, st.st_size);
                 (void)close(fd);
 
                 // move onto the next song in the queue if repeat is not set
                 if (!repeat_status) {
-                        song_t s;
+                        song_t *s;
 
                         pthread_mutex_lock(&mtx_queue);
 
@@ -600,7 +601,7 @@ int control_removeSong(char *url, int index)
         return err;
 }
 
-int control_getSongFilepath(song_t *song, char **buf)
+int control_getSongFilepath(song_t *song, char *buf)
 {
         // verify that the song is in the queue first
         song_t *s;
@@ -610,7 +611,7 @@ int control_getSongFilepath(song_t *song, char **buf)
         s = song_queue;
         while (s) {
                 if (s == song) {
-                        (void)strcpy(*buf, song->filepath);
+                        (void)strcpy(buf, song->filepath);
                         pthread_mutex_unlock(&mtx_queue);
                         return 0;
                 }
@@ -649,6 +650,25 @@ enum control_song_status control_setSongStatus(song_t *song, enum control_song_s
 
         s->status = status;
         pthread_mutex_unlock(&mtx_queue);
+
+        return status;
+}
+
+enum control_song_status control_getFirstSongStatus(void)
+{
+        song_t *s;
+        enum control_song_status status = CONTROL_SONG_STATUS_UNKNOWN;
+
+        pthread_mutex_lock(&mtx_queue);
+        s = song_queue;
+        while (s) {
+                if (s->status != CONTROL_SONG_STATUS_UNKNOWN ||
+                    s->status != CONTROL_SONG_STATUS_REMOVED) {
+                        status = s->status;
+                        break;
+                }
+        }
+        pthread_mutex_lock(&mtx_queue);
 
         return status;
 }
@@ -710,7 +730,6 @@ out:
 
 int control_onDownloadComplete(song_t* song)
 {
-        song_t *s;
         enum control_song_status status;
 
         status = control_setSongStatus(song, CONTROL_SONG_STATUS_LOADED);
@@ -727,4 +746,6 @@ int control_onDownloadComplete(song_t* song)
                 control_playAudio();
 
         pthread_mutex_unlock(&mtx_queue);
+
+        return status;
 }

@@ -1,5 +1,5 @@
 OUTFILE = musicPlayer
-OUTDIR = $(HOME)/cmpt433/public/myApps
+OUTDIR = $(HOME)/cmpt433/public/music_player
 
 CC = gcc
 CC_C = arm-linux-gnueabihf-gcc
@@ -13,6 +13,7 @@ SRCS = $(wildcard *.c)
 all: app node script
 
 app:
+	mkdir -p $(OUTDIR)
 	$(CC_C) $(CFLAGS) $(SRCS) $(LFLAGS) $(LIBS) -o $(OUTDIR)/$(OUTFILE)
 
 node:
@@ -25,7 +26,7 @@ script:
 	cp scripts/*.service $(OUTDIR)/music-player-services
 
 clean:
-	rm $(OUTDIR)/$(OUTFILE)
+	rm -f $(OUTDIR)/$(OUTFILE)
 	rm -R $(OUTDIR)/music-player-nodejs-copy/
-	rm $(OUTDIR)/install.sh
+	rm -f $(OUTDIR)/install.sh
 	rm -R $(OUTDIR)/music-player-services/

@@ -13,8 +13,9 @@
 #define FIFO_QUEUE_SIZE         10
 #define CMDLINE_MAX_LEN         512
 
+static const char *YTDL_UPDATE_CMDLINE = "youtube-dl -U";
 static const char* DOWNLOAD_CMDLINE = "youtube-dl --extract-audio --audio-format mp3 -o '~/cache/%%(id)s.%%(ext)s' --postprocessor-args \"-ar 44100\" https://www.youtube.com/watch?v=%s";
-static const char* RM_CACHE_CMDLINE = "rm /root/cache/*";
+static const char* RM_CACHE_CMDLINE = "rm /root/cache/* > /dev/null";
 static const char* RM_CMDLINE = "rm %s";
 
 static song_t* songFifoQueue[FIFO_QUEUE_SIZE];
@@ -49,6 +50,9 @@ void downloader_init(void)
 
         // Clear cache
         system(RM_CACHE_CMDLINE);
+
+        // Update youtube-dl
+        system(YTDL_UPDATE_CMDLINE);
 }
 
 void downloader_cleanup(void) 
@@ -137,7 +141,7 @@ static void* downloadThread(void *args)
         // Keep downloading as long as there are songs in the queue
         song_t* song = dequeueSong();
         while (song) {
-                if (control_getSongFilePath(song, &filepath)) {
+                if (control_getSongFilepath(song, filepath)) {
                         printf(PRINTF_MODULE "Warning: Song has been removed from the queue, skipping download\n");
                 } else {
                         // Run youtube-dl to download youtube audio as a .mp3 file
