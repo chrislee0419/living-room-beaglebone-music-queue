@@ -330,6 +330,9 @@ static void *receiverLoop(void *arg)
                 (void)memset(buf, 0, BUFFER_SIZE);
         }
 
+        printf(PRINTF_MODULE "Notice: shutting down UDP receiver thread\n");
+        (void)fflush(stdout);
+
         return NULL;
 }
 
@@ -363,6 +366,10 @@ static void *senderLoop(void *arg)
                 }
                 pthread_mutex_unlock(&mtx_queue);
         }
+
+        printf(PRINTF_MODULE "Notice: shutting down UDP sender thread\n");
+        (void)fflush(stdout);
+
         return NULL;
 }
 

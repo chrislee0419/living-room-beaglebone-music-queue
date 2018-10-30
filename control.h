@@ -82,12 +82,13 @@ void control_addSong(char *url);
 int control_removeSong(char *url, int index);
 
 /**
- * Copies the path to the song's associated music file to a provided buffer.
+ * Copies the vid and filepath strings to user provided buffers
  * @param song Song object
- * @param buf Address to a buffer
+ * @param vid Address to a buffer to store the vid
+ * @param filepath Address to a buffer to store the filepath
  * @return 0, if successful; otherwise, error
  */
-int control_getSongFilepath(song_t *song, char *buf);
+int control_getSongDetails(song_t *song, char *vid, char *filepath);
 
 /**
  * Set the status of a song. Should be used for thread safety.

@@ -67,6 +67,7 @@ static pthread_mutex_t mtx_queue = PTHREAD_MUTEX_INITIALIZER;
 // Downloads them in a new background thread
 static void updateDownloadedSongs(void)
 {
+        // TODO: not thread-safe
         // Go through first N songs and download them if not already downloaded
         song_t* current_song = song_queue;
         for (int i = 0; i < NUM_SONGS_TO_DOWNLOAD; i++) {
@@ -103,13 +104,18 @@ static void debugPrintSong(song_t* song) {
                                 strcpy(statusStr, "REMOVED");
                                 break;
                 }
-                printf("id=[%s], status=[%s], file=[%s]\n", song->vid, statusStr, song->filepath);
+                printf(PRINTF_MODULE "DEBUG - id=[%s], status=[%s], file=[%s]\n", song->vid, statusStr, song->filepath);
+                (void)fflush(stdout);
         }
 }
 
 static void debugPrintSongList(void)
 {
         // NOTE: not thread-safe, song could have been free'd
+
+        printf(PRINTF_MODULE "DEBUG - printing current song queue\n");
+        (void)fflush(stdout);
+
         song_t* current_song = song_queue;
         while (current_song) {
                 debugPrintSong(current_song);
@@ -270,6 +276,9 @@ static void *audioLoop(void *arg)
                 pthread_mutex_unlock(&mtx_audio);
         }
 
+        printf(PRINTF_MODULE "Notice: shutting down audio playback thread\n");
+        (void)fflush(stdout);
+
         return NULL;
 }
 
@@ -326,6 +335,9 @@ static void *decoderLoop(void *arg)
                         goto sleep;
                 }
 
+                printf(PRINTF_MODULE "Notice: starting decode of \"%s\"\n", current_song->filepath);
+                (void)fflush(stdout);
+
                 sb.song = current_song;
 
                 pthread_mutex_unlock(&mtx_queue);
@@ -365,6 +377,9 @@ sleep:
                 pthread_mutex_unlock(&mtx_queue);
                 (void)sleep(1);
         }
+
+        printf(PRINTF_MODULE "Notice: shutting down decoder thread\n");
+        (void)fflush(stdout);
 
         return NULL;
 }
@@ -412,7 +427,8 @@ static void *queueCleanerLoop(void *arg)
                                         song_queue = next;
                                 else
                                         curr->prev->next = curr->next;
-                                curr->next->prev = curr->prev;
+                                if (curr->next)
+                                        curr->next->prev = curr->prev;
 
                                 free(curr);
                         }
@@ -424,6 +440,9 @@ sleep:
                 pthread_mutex_unlock(&mtx_queue);
                 (void)nanosleep(&sleep_time, NULL);
         }
+
+        printf(PRINTF_MODULE "Notice: shutting down cleaner thread\n");
+        (void)fflush(stdout);
 
         return NULL;
 }
@@ -444,7 +463,7 @@ int control_init(void)
         else if ((err = pthread_create(&th_dec, NULL, decoderLoop, NULL)))
                 printf(PRINTF_MODULE "Error: unable to create thread for MP3 decoding\n");
         else if ((err = pthread_create(&th_clr, NULL, queueCleanerLoop, NULL)))
-                printf(PRINTF_MODULE "Error: unable to create thread for song queue management\n");
+                printf(PRINTF_MODULE "Error: unable to create thread for song queue cleanup\n");
 
         return err;
 }
@@ -537,6 +556,7 @@ void control_addSong(char *url)
         strcat(new_song->filepath, new_song->vid);
         strcat(new_song->filepath, MP3_EXT);
 
+        new_song->prev = NULL;
         new_song->next = NULL;
         new_song->status = CONTROL_SONG_STATUS_QUEUED;
 
@@ -551,6 +571,7 @@ void control_addSong(char *url)
                 }
 
                 current_song->next = new_song;
+                new_song->prev = current_song;
         }
 
         pthread_mutex_unlock(&mtx_queue);
@@ -601,7 +622,7 @@ int control_removeSong(char *url, int index)
         return err;
 }
 
-int control_getSongFilepath(song_t *song, char *buf)
+int control_getSongDetails(song_t *song, char *vid, char *filepath)
 {
         // verify that the song is in the queue first
         song_t *s;
@@ -611,7 +632,10 @@ int control_getSongFilepath(song_t *song, char *buf)
         s = song_queue;
         while (s) {
                 if (s == song) {
-                        (void)strcpy(buf, song->filepath);
+                        if (vid)
+                                (void)strcpy(vid, song->vid);
+                        if (filepath)
+                                (void)strcpy(filepath, song->filepath);
                         pthread_mutex_unlock(&mtx_queue);
                         return 0;
                 }
@@ -668,7 +692,7 @@ enum control_song_status control_getFirstSongStatus(void)
                         break;
                 }
         }
-        pthread_mutex_lock(&mtx_queue);
+        pthread_mutex_unlock(&mtx_queue);
 
         return status;
 }

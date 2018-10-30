@@ -14,7 +14,7 @@
 #define CMDLINE_MAX_LEN         512
 
 static const char *YTDL_UPDATE_CMDLINE = "youtube-dl -U";
-static const char* DOWNLOAD_CMDLINE = "youtube-dl --extract-audio --audio-format mp3 -o '~/cache/%%(id)s.%%(ext)s' --postprocessor-args \"-ar 44100\" https://www.youtube.com/watch?v=%s";
+static const char* DOWNLOAD_CMDLINE = "youtube-dl --extract-audio --audio-format mp3 -o '~/cache/%%(id)s.%%(ext)s' --postprocessor-args \"-ar 44100\" https://www.youtube.com/watch?v=%s > /dev/null";
 static const char* RM_CACHE_CMDLINE = "rm /root/cache/* > /dev/null";
 static const char* RM_CMDLINE = "rm %s";
 
@@ -43,7 +43,7 @@ void downloader_init(void)
 
         // Clean FIFO queue
         pthread_mutex_lock(&fifoMutex);
-                memset(songFifoQueue, 0, FIFO_QUEUE_SIZE * sizeof(songFifoQueue));
+                memset(songFifoQueue, 0, FIFO_QUEUE_SIZE * sizeof(*songFifoQueue));
                 fifoHeadIndex = 0;
                 fifoTailIndex = 0;
         pthread_mutex_unlock(&fifoMutex);
@@ -71,7 +71,6 @@ void downloader_queueDownloadSong(song_t* song)
         // Check if the file exists already
         if (!access(song->filepath, F_OK)) {
                 printf(PRINTF_MODULE "Notice: music file already exists, using existing file\n");
-                pthread_mutex_unlock(&fifoMutex);
 
                 control_setSongStatus(song, CONTROL_SONG_STATUS_LOADED);
                 return;
@@ -84,6 +83,9 @@ void downloader_queueDownloadSong(song_t* song)
         if (!pthread_mutex_trylock(&isDownloadingMutex)) {
                 pthread_t pDownloadThread;
                 pthread_attr_t attr;
+
+                printf(PRINTF_MODULE "Notice: spawning downloader thread\n");
+                (void)fflush(stdout);
 
                 // set detached thread state, so join is not necessary for cleanup
                 (void)pthread_attr_init(&attr);
@@ -137,17 +139,24 @@ static song_t* dequeueSong(void)
 static void* downloadThread(void *args)
 {
         char filepath[CONTROL_MAXLEN_FN];
+        char vid[CONTROL_MAXLEN_VID];
 
         // Keep downloading as long as there are songs in the queue
         song_t* song = dequeueSong();
         while (song) {
-                if (control_getSongFilepath(song, filepath)) {
+                if (control_getSongDetails(song, vid, filepath)) {
                         printf(PRINTF_MODULE "Warning: Song has been removed from the queue, skipping download\n");
                 } else {
+                        printf(PRINTF_MODULE "Notice: starting download for \"%s\"\n", filepath);
+                        (void)fflush(stdout);
+
                         // Run youtube-dl to download youtube audio as a .mp3 file
                         char cmdline[CMDLINE_MAX_LEN];
-                        sprintf(cmdline, DOWNLOAD_CMDLINE, song->vid);
+                        sprintf(cmdline, DOWNLOAD_CMDLINE, vid);
                         system(cmdline);
+
+                        printf(PRINTF_MODULE "Notice: download finished for \"%s\"\n", filepath);
+                        (void)fflush(stdout);
 
                         // Perform checks and update song status
                         if (control_onDownloadComplete(song) == CONTROL_SONG_STATUS_UNKNOWN)
@@ -158,6 +167,9 @@ static void* downloadThread(void *args)
         }
 
         pthread_mutex_unlock(&isDownloadingMutex);
+
+        printf(PRINTF_MODULE "Notice: shutting down downloader thread\n");
+        (void)fflush(stdout);
 
         return 0;
 }
