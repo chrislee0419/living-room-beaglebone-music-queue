@@ -4,8 +4,8 @@ OUTDIR = $(HOME)/cmpt433/public/music_player
 CC = gcc
 CC_C = arm-linux-gnueabihf-gcc
 CFLAGS = -Wall -g -std=c99 -D _POSIX_C_SOURCE=200809L -D_GNU_SOURCE -Werror
-LFLAGS = -L$(HOME)/cmpt433/public/asound_lib_bbg
-LIBS = -lpthread -lasound -lmad
+LFLAGS = -L$(HOME)/cmpt433/public/asound_lib_bbg -L$(HOME)/cmpt433/public/libs_bbg
+LIBS = -lpthread -lasound -lmad -lfaad -logg -lopus
 
 #SRCS = main.c network.c control.c audio.c downloader.c disp.c
 SRCS = $(wildcard *.c)
