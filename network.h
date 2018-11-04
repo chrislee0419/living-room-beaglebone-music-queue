@@ -1,8 +1,6 @@
 #ifndef _NETWORK_H_
 #define _NETWORK_H_
 
-#include <netinet/in.h>
-
 #define NETWORK_MAX_BUFFER_SIZE         1500
 
 /**
