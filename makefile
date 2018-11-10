@@ -1,6 +1,8 @@
 OUTFILE = musicPlayer
 OUTDIR = $(HOME)/cmpt433/public/music_player
 
+TESTDIR = tests
+
 CC_C = arm-linux-gnueabihf-gcc
 CFLAGS = -Wall -g -std=c99 -D _POSIX_C_SOURCE=200809L -D_GNU_SOURCE -Werror
 LFLAGS = -Llibs
@@ -16,6 +18,11 @@ app:
 	mkdir -p $(OUTDIR)
 	$(CC_C) $(CFLAGS) $(IFLAGS) $(SRCS) $(LFLAGS) $(LIBS) -o $(OUTDIR)/$(OUTFILE)
 
+test: streamtest
+
+streamtest:
+	gcc $(CFLAGS) $(IFLAGS) stream.c $(TESTDIR)/streamtest.c -lcurl -o $(TESTDIR)/streamtest
+
 node:
 	mkdir -p $(OUTDIR)/music-player-nodejs-copy/
 	cp -R nodejs/* $(OUTDIR)/music-player-nodejs-copy/
@@ -30,3 +37,4 @@ clean:
 	rm -R $(OUTDIR)/music-player-nodejs-copy/
 	rm -f $(OUTDIR)/install.sh
 	rm -R $(OUTDIR)/music-player-services/
+	rm $(TESTDIR)/streamtest
