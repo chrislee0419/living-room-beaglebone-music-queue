@@ -87,7 +87,7 @@ unsigned int copy_to_user_buffer(stream_t *st, char *buf, unsigned int bytes)
 /**
  * Public functions
  */
-stream_t *stream_init(char *url)
+stream_t *stream_init(const char *url)
 {
         stream_t *st;
 
@@ -129,7 +129,7 @@ stream_t *stream_init(char *url)
 
         // configure easy handle
         (void)curl_easy_setopt(st->ceh, CURLOPT_URL, url);
-        (void)curl_easy_setopt(st->ceh, CURLOPT_POST, 1);
+        (void)curl_easy_setopt(st->ceh, CURLOPT_POST, 0);
         (void)curl_easy_setopt(st->ceh, CURLOPT_WRITEFUNCTION, write_data);
         (void)curl_easy_setopt(st->ceh, CURLOPT_WRITEDATA, st);
 
@@ -170,14 +170,15 @@ enum stream_status stream_pull_data(stream_t *st, char *buf, unsigned int *bytes
 
         // copy newly acquired data if necessary
         if (bytes_to_copy > 0 && st->buf_used_size > 0)
-                bytes_to_copy = copy_to_user_buffer(st, buf, bytes_to_copy);
+                bytes_to_copy = copy_to_user_buffer(st, buf + (*bytes - bytes_to_copy), bytes_to_copy);
 
         // no handles are running
         if (running == 0)  {
                 struct CURLMsg *msg;
                 enum stream_status status = STREAM_STATUS_COMPLETE;
+                int remaining = 0;
 
-                while ((msg = curl_multi_info_read(st->cmh, NULL))) {
+                while ((msg = curl_multi_info_read(st->cmh, &remaining))) {
                         if (msg->msg == CURLMSG_DONE) {
                                 printf(PRINTF_MODULE "Notice: stream finished (%s)\n",
                                         curl_easy_strerror(msg->data.result));
@@ -201,6 +202,7 @@ enum stream_status stream_pull_data(stream_t *st, char *buf, unsigned int *bytes
         }
 
         if (bytes_to_copy == *bytes) {
+                *bytes = 0;
                 return STREAM_STATUS_OK_NODATA;
         } else {
                 *bytes -= bytes_to_copy;

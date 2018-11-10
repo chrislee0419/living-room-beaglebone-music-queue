@@ -18,7 +18,7 @@ typedef struct stream stream_t;
  * @param url URL to stream source
  * @return Stream object; NULL if unsuccessful
  */
-stream_t *stream_init(char *url);
+stream_t *stream_init(const char *url);
 
 /**
  * Pull data from stream and store in the stream object.
