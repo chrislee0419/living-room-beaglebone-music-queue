@@ -1,20 +1,20 @@
 OUTFILE = musicPlayer
 OUTDIR = $(HOME)/cmpt433/public/music_player
 
-CC = gcc
 CC_C = arm-linux-gnueabihf-gcc
 CFLAGS = -Wall -g -std=c99 -D _POSIX_C_SOURCE=200809L -D_GNU_SOURCE -Werror
 LFLAGS = -Llibs
-LIBS = -lpthread -lasound -lmad -lfaad -logg -lopus
+IFLAGS = -I/usr/local/include
+LIBS = -lpthread -lasound -lmad -lfaad -logg -lopus -lcurl
 
 #SRCS = main.c network.c control.c audio.c downloader.c disp.c
-SRCS = $(wildcard *.c)
+SRCS = $(wildcard *.c) $(wildcard decoders/*.c)
 
 all: app node script
 
 app:
 	mkdir -p $(OUTDIR)
-	$(CC_C) $(CFLAGS) $(SRCS) $(LFLAGS) $(LIBS) -o $(OUTDIR)/$(OUTFILE)
+	$(CC_C) $(CFLAGS) $(IFLAGS) $(SRCS) $(LFLAGS) $(LIBS) -o $(OUTDIR)/$(OUTFILE)
 
 node:
 	mkdir -p $(OUTDIR)/music-player-nodejs-copy/
