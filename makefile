@@ -22,6 +22,10 @@ test: streamtest
 
 streamtest:
 	gcc $(CFLAGS) $(IFLAGS) stream.c $(TESTDIR)/streamtest.c -lcurl -o $(TESTDIR)/streamtest
+	youtube-dl --get-url https://www.youtube.com/watch?v=jNQXAC9IVRw | grep "mime=audio" > $(TESTDIR)/streamtest_urls.txt
+	youtube-dl --get-url https://www.youtube.com/watch?v=wW0r_m7gTY8 | grep "mime=audio" >> $(TESTDIR)/streamtest_urls.txt
+	youtube-dl --get-url https://www.youtube.com/watch?v=hpRPMnVeF5s | grep "mime=audio" >> $(TESTDIR)/streamtest_urls.txt
+	youtube-dl --get-url https://www.youtube.com/watch?v=s-TvUZ1hIKM | grep "mime=audio" >> $(TESTDIR)/streamtest_urls.txt
 
 node:
 	mkdir -p $(OUTDIR)/music-player-nodejs-copy/
@@ -34,7 +38,7 @@ script:
 
 clean:
 	rm -f $(OUTDIR)/$(OUTFILE)
-	rm -R $(OUTDIR)/music-player-nodejs-copy/
+	rm -Rf $(OUTDIR)/music-player-nodejs-copy/
 	rm -f $(OUTDIR)/install.sh
-	rm -R $(OUTDIR)/music-player-services/
-	rm $(TESTDIR)/streamtest
+	rm -Rf $(OUTDIR)/music-player-services/
+	rm -f $(TESTDIR)/streamtest
